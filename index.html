@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f7">
+  <title>ダッシュボード | 香川高専 EC 単位管理</title>
+  <link rel="stylesheet" href="./css/styles.css">
+  <script type="module" src="./js/dashboard.js"></script>
+</head>
+<body>
+  <div id="site-header"></div>
+  <main class="container dashboard" id="main-content">
+    <header class="page-intro dashboard-intro">
+      <div>
+        <p class="eyebrow">香川高専 電気情報工学科</p>
+        <h1>ダッシュボード</h1>
+        <p class="intro-description">取得単位と、進級・学校推薦・卒業に必要な単位を確認できます。</p>
+      </div>
+      <a class="button" href="./courses.html"><span data-icon="book"></span>科目を管理<span data-icon="arrow"></span></a>
+    </header>
+    <noscript><p class="note">単位を集計するには JavaScript を有効にしてください。</p></noscript>
+    <div id="dashboard-summary"></div>
+  </main>
+  <div id="site-footer"></div>
+</body>
+</html>

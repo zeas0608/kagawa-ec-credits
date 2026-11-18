@@ -1,0 +1,262 @@
+.foundation-panel {
+  margin-bottom: 24px;
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.foundation-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  row-gap: 8px;
+}
+
+.foundation-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.foundation-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 17px 0 0;
+}
+
+.foundation-stat {
+  min-width: 0;
+  padding-inline: clamp(10px, 2.5vw, 24px);
+}
+
+.foundation-stat:first-child {
+  padding-inline-start: 0;
+}
+
+.foundation-stat + .foundation-stat {
+  border-inline-start: 1px solid var(--line, #deebe6);
+}
+
+.foundation-stat dt,
+.foundation-stat dd span {
+  color: var(--muted, #5b746a);
+  font-size: .75rem;
+}
+
+.foundation-stat dd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 5px;
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.foundation-stat dd strong {
+  font-size: clamp(1.55rem, 5vw, 2.15rem);
+  line-height: 1.05;
+  letter-spacing: -.035em;
+}
+
+.foundation-total dd strong {
+  color: var(--primary);
+}
+
+.course-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.course-search-field {
+  grid-column: 1 / -1;
+}
+
+.course-search-input {
+  position: relative;
+}
+
+.course-search-input > span {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 12px;
+  color: var(--muted, #5b746a);
+  pointer-events: none;
+}
+
+.course-search-input > input {
+  width: 100%;
+  padding-inline-start: 38px;
+}
+
+.course-results {
+  margin: 14px 2px 10px;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.course-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.course-source {
+  margin: 16px 2px 0;
+  font-size: .83rem;
+}
+
+.course-group {
+  margin: 0;
+}
+
+.course-group > .course-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 12px clamp(16px, 3vw, 24px);
+  cursor: pointer;
+  list-style: none;
+}
+
+.course-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.course-group-title {
+  font-weight: 750;
+}
+
+.course-group-count {
+  margin-inline-start: auto;
+  color: var(--muted, #5b746a);
+  white-space: nowrap;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.course-chevron {
+  display: grid;
+  flex: 0 0 20px;
+  place-items: center;
+  color: var(--muted, #5b746a);
+}
+
+.course-group[open] .course-chevron {
+  transform: rotate(180deg);
+}
+
+.course-group-body {
+  padding: 0 clamp(12px, 2.75vw, 22px) 14px;
+}
+
+.course-list-title {
+  margin: 0;
+  padding: 12px 5px 8px;
+  color: var(--muted, #5b746a);
+  font-size: .83rem;
+}
+
+.course-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.course-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px clamp(10px, 2vw, 14px);
+}
+
+.course-row[data-earned="true"] {
+  background: #f3faf6;
+}
+
+.course-main {
+  min-width: 0;
+}
+
+.course-name {
+  margin: 0 0 5px;
+  font-size: .96rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.course-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: var(--muted, #5b746a);
+  font-size: .74rem;
+}
+
+.course-credit {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.course-credit > span {
+  margin-inline-start: 2px;
+}
+
+.course-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
+.course-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: inherit;
+  font-size: .84rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.course-check input {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: inherit;
+}
+
+.course-check input:disabled + span {
+  color: var(--muted, #5b746a);
+}
+
+.course-check:has(input:disabled) {
+  cursor: default;
+}
+
+@media (min-width: 680px) {
+  .course-filters {
+    grid-template-columns: minmax(200px, 1.6fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .course-search-field {
+    grid-column: auto;
+  }
+
+  .course-actions {
+    margin-inline-start: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .course-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "kagawa-kosen-ec-credits",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/model.test.js"
+  }
+}
