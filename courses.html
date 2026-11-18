@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>科目管理 | 香川高専 EC 単位管理</title>
+  <title>授業 | 香川高専 EC 単位管理</title>
   <link rel="stylesheet" href="./css/styles.css">
   <link rel="stylesheet" href="./css/courses.css">
   <script type="module" src="./js/courses.js"></script>
@@ -12,60 +12,10 @@
   <div id="site-header"></div>
   <main class="container subpage" id="main-content">
     <header class="page-intro">
-      <h1>科目管理</h1>
-      <p>取得済みの科目にチェックを入れます。</p>
+      <h1>授業</h1>
     </header>
-    <noscript><p class="note">科目を管理するには、ブラウザでJavaScriptを有効にしてください。</p></noscript>
-
-    <section class="panel foundation-panel" aria-labelledby="foundation-title">
-      <div class="foundation-header">
-        <h2 id="foundation-title">1〜3年の必修科目</h2>
-        <span class="tag earned">一括取得済み</span>
-      </div>
-      <dl class="foundation-totals" id="foundation-totals"></dl>
-    </section>
-
-    <section class="course-manager" aria-label="科目一覧">
-      <form class="panel filter-bar course-filters" id="course-filters" role="search" aria-label="科目を絞り込む">
-        <div class="field course-search-field">
-          <label for="course-search">科目名検索</label>
-          <div class="course-search-input">
-            <span data-icon="search" aria-hidden="true"></span>
-            <input id="course-search" name="search" type="search" placeholder="電気回路" autocomplete="off">
-          </div>
-        </div>
-        <div class="field">
-          <label for="course-grade">学年</label>
-          <select id="course-grade" name="grade">
-            <option value="">すべて</option>
-            <option value="1">1年</option>
-            <option value="2">2年</option>
-            <option value="3">3年</option>
-            <option value="4">4年</option>
-            <option value="5">5年</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="course-category">分類</label>
-          <select id="course-category" name="category">
-            <option value="">すべて</option>
-            <option value="general">一般</option>
-            <option value="specialized">専門</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="course-type">必修・選択</label>
-          <select id="course-type" name="type">
-            <option value="">すべて</option>
-            <option value="required">必修</option>
-            <option value="elective">選択</option>
-          </select>
-        </div>
-      </form>
-      <p id="course-results" class="course-results muted" role="status" aria-live="polite"></p>
-      <div id="course-groups" class="course-groups"></div>
-      <p class="course-source" id="course-source"></p>
-    </section>
+    <noscript><p class="note">授業の単位を記録するには JavaScript を有効にしてください。</p></noscript>
+    <section id="course-groups" class="course-groups" aria-label="科目一覧"></section>
   </main>
   <div id="site-footer"></div>
 </body>

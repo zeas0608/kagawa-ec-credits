@@ -1,68 +1,69 @@
-import { COURSES, INITIAL_REQUIRED_BY_GRADE, SYLLABUS_URL, SYLLABUS_YEAR } from './course-data.js';
+import { COURSES } from './course-data.js';
 import {
-  COURSE_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, matchesSearch, mountShell,
+  COURSE_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, mountShell,
   saveOpenSections, updateState,
 } from './common.js';
 import { getCourseStatus, setCourseEarned, STORAGE_KEY } from './model.js';
 
 const years = [1, 2, 3, 4, 5];
-const courseById = new Map(COURSES.map(course => [course.id, course]));
-const filters = document.querySelector('#course-filters');
+const yearCourses = COURSES.filter(course => !course.equivalentGroup);
+const courseById = new Map(yearCourses.map(course => [course.id, course]));
+const equivalentGroups = new Map();
+for (const course of COURSES) {
+  if (!course.equivalentGroup) continue;
+  if (!equivalentGroups.has(course.equivalentGroup)) equivalentGroups.set(course.equivalentGroup, []);
+  equivalentGroups.get(course.equivalentGroup).push(course);
+}
+for (const courses of equivalentGroups.values()) courses.sort((a, b) => a.grade - b.grade);
+
 const groups = document.querySelector('#course-groups');
-const results = document.querySelector('#course-results');
 let openYears = getOpenSections(COURSE_SECTIONS_KEY);
 
-function renderFoundation() {
-  const totals = { general: 0, specialized: 0 };
-  for (const year of Object.values(INITIAL_REQUIRED_BY_GRADE)) {
-    totals.general += year.general;
-    totals.specialized += year.specialized;
-  }
-  const stats = [
-    { label: '一般', value: totals.general, category: 'general' },
-    { label: '専門', value: totals.specialized, category: 'specialized' },
-    { label: '合計', value: totals.general + totals.specialized, category: 'total' },
-  ];
-  document.querySelector('#foundation-totals').innerHTML = stats.map(stat => `
-    <div class="foundation-stat foundation-${stat.category}">
-      <dt>${stat.label}</dt>
-      <dd><strong>${stat.value}</strong><span>単位</span></dd>
-    </div>
-  `).join('');
+function earnedGrade(state, alternatives) {
+  const earned = alternatives.find(course => getCourseStatus(state, course).earned);
+  return earned ? String(earned.grade) : '';
 }
 
-function renderCourse(course, state) {
-  const name = escapeHtml(course.name);
-  const id = escapeHtml(course.id);
-  const { earned } = getCourseStatus(state, course);
-  const equivalent = course.equivalentGroup
-    ? '<span title="複数学年の取得を記録しても、単位は一度だけ計上されます。">他学年にも掲載</span>'
-    : '';
-  const recommendation = course.recommendation ? '<span>推薦指定</span>' : '';
-  const code = escapeHtml(course.code);
-  const syllabus = course.syllabusUrl
-    ? `<a class="course-syllabus" href="${escapeHtml(course.syllabusUrl)}"
-        aria-label="シラバス ${code} ${name}（${course.grade}年）">シラバス ${code}</a>`
-    : '';
+function renderRow(course, identifier, earned, control) {
   return `
-    <li class="subject-row course-row" data-course-id="${id}" data-earned="${earned}">
+    <li class="subject-row course-row" ${identifier} data-earned="${earned}">
       <div class="subject-main course-main">
-        <p class="course-name">${name}</p>
+        <p class="course-name">${escapeHtml(course.name)}</p>
         <div class="course-meta">
           <span class="tag ${course.category}">${categoryLabel(course.category)}</span>
           <span class="course-credit">${course.credits}<span>単位</span></span>
-          ${recommendation}${equivalent}${syllabus}
         </div>
       </div>
-      <div class="subject-actions course-actions">
-        <label class="course-check">
-          <input type="checkbox" data-course-action="earn"
-            aria-label="単位取得 ${name}（${course.grade}年）" ${earned ? 'checked' : ''}>
-          <span>単位取得</span>
-        </label>
-      </div>
+      <div class="subject-actions">${control}</div>
     </li>
   `;
+}
+
+function renderCourse(course, state) {
+  const { earned } = getCourseStatus(state, course);
+  const control = `
+    <label class="course-check">
+      <input type="checkbox" data-course-action="earn"
+        aria-label="単位取得 ${escapeHtml(course.name)}（${course.grade}年）" ${earned ? 'checked' : ''}>
+      <span>単位取得</span>
+    </label>
+  `;
+  return renderRow(course, `data-course-id="${escapeHtml(course.id)}"`, earned, control);
+}
+
+function renderEquivalentCourse(id, alternatives, state) {
+  const course = alternatives[0];
+  const selectedGrade = earnedGrade(state, alternatives);
+  const options = alternatives.map(({ grade }) => (
+    `<option value="${grade}" ${String(grade) === selectedGrade ? 'selected' : ''}>${grade}年で修得</option>`
+  )).join('');
+  const control = `
+    <select class="course-grade-choice" data-course-action="choose-year" aria-label="${escapeHtml(course.name)}の修得学年">
+      <option value="">未修得</option>
+      ${options}
+    </select>
+  `;
+  return renderRow(course, `data-equivalent-group="${escapeHtml(id)}"`, Boolean(selectedGrade), control);
 }
 
 function renderList(courses, state, title = '') {
@@ -73,18 +74,11 @@ function renderList(courses, state, title = '') {
   `;
 }
 
-function renderSection(year, courses, state) {
-  const selected = courses.filter(course => course.grade === year);
-  if (!selected.length) return '';
-  const content = year <= 3
-    ? renderList(selected, state)
-    : renderList(selected.filter(course => course.required), state, '必修科目') +
-      renderList(selected.filter(course => !course.required), state, '選択科目');
+function renderSection(id, title, content) {
   return `
-    <details class="panel subject-group course-group" data-section="${year}" ${openYears.has(String(year)) ? 'open' : ''}>
+    <details class="panel subject-group course-group" data-section="${id}" ${openYears.has(id) ? 'open' : ''}>
       <summary class="course-group-summary">
-        <span class="course-group-title">${year}年の${year <= 3 ? '選択科目' : '授業科目'}</span>
-        <span class="course-group-count">${selected.length}科目</span>
+        <span class="course-group-title">${title}</span>
         <span class="course-chevron" aria-hidden="true">${icon('chevron', 18)}</span>
       </summary>
       <div class="course-group-body">${content}</div>
@@ -93,36 +87,37 @@ function renderSection(year, courses, state) {
 }
 
 function renderCourses() {
-  const fields = new FormData(filters);
-  const search = fields.get('search').trim();
-  const grade = fields.get('grade');
-  const category = fields.get('category');
-  const type = fields.get('type');
-  const courses = COURSES.filter(course => (
-    (!grade || course.grade === Number(grade)) &&
-    (!category || course.category === category) &&
-    (!type || course.required === (type === 'required')) &&
-    matchesSearch(course.name, search)
-  ));
-  results.textContent = `${courses.length}科目`;
-  if (!courses.length) {
-    groups.innerHTML = '<p class="panel empty-state">条件に一致する科目がありません。</p>';
-    return;
-  }
   const state = getState();
-  groups.innerHTML = years.map(year => renderSection(year, courses, state)).join('');
+  const yearSections = years.map(year => {
+    const courses = yearCourses.filter(course => course.grade === year);
+    const content = year <= 3
+      ? renderList(courses, state)
+      : renderList(courses.filter(course => course.required), state, '必修科目') +
+        renderList(courses.filter(course => !course.required), state, '選択科目');
+    return renderSection(String(year), `${year}年`, content);
+  });
+  const sharedRows = [...equivalentGroups].map(([id, alternatives]) => renderEquivalentCourse(id, alternatives, state));
+  const other = renderSection('other', 'その他', `<ul class="subject-list course-list">${sharedRows.join('')}</ul>`);
+  groups.innerHTML = yearSections.join('') + other;
 }
 
 function syncCourseRow(row, state) {
+  const control = row.querySelector('[data-course-action]');
+  const alternatives = equivalentGroups.get(row.dataset.equivalentGroup);
+  if (alternatives) {
+    control.value = earnedGrade(state, alternatives);
+    row.dataset.earned = Boolean(control.value);
+    return;
+  }
   const course = courseById.get(row.dataset.courseId);
   const { earned } = getCourseStatus(state, course);
-  row.querySelector('[data-course-action="earn"]').checked = earned;
+  control.checked = earned;
   row.dataset.earned = earned;
 }
 
 function syncCourseRows() {
   const state = getState();
-  for (const row of groups.querySelectorAll('[data-course-id]')) syncCourseRow(row, state);
+  for (const row of groups.querySelectorAll('.course-row')) syncCourseRow(row, state);
 }
 
 function syncOpenYears() {
@@ -132,25 +127,28 @@ function syncOpenYears() {
   }
 }
 
-filters.addEventListener('submit', event => event.preventDefault());
-filters.addEventListener('input', renderCourses);
 groups.addEventListener('click', event => {
   const summary = event.target.closest('.course-group-summary');
   if (!summary || event.defaultPrevented) return;
   const section = summary.parentElement;
-  const year = section.dataset.section;
+  const id = section.dataset.section;
   openYears = getOpenSections(COURSE_SECTIONS_KEY);
-  if (section.open) openYears.delete(year);
-  else openYears.add(year);
+  if (section.open) openYears.delete(id);
+  else openYears.add(id);
   saveOpenSections(COURSE_SECTIONS_KEY, openYears);
 });
 groups.addEventListener('change', event => {
-  const control = event.target.closest('[data-course-action="earn"]');
+  const control = event.target.closest('[data-course-action]');
   if (!control) return;
-  const row = control.closest('[data-course-id]');
-  const course = courseById.get(row.dataset.courseId);
+  const row = control.closest('.course-row');
+  const alternatives = equivalentGroups.get(row.dataset.equivalentGroup);
   const state = updateState(draft => {
-    setCourseEarned(draft, course, control.checked);
+    if (alternatives) {
+      const selected = alternatives.find(course => String(course.grade) === control.value);
+      for (const course of alternatives) setCourseEarned(draft, course, course === selected);
+    } else {
+      setCourseEarned(draft, courseById.get(row.dataset.courseId), control.checked);
+    }
   });
   syncCourseRow(row, state);
 });
@@ -166,7 +164,4 @@ window.addEventListener('pageshow', event => {
 });
 
 mountShell('courses');
-document.querySelector('#course-source').innerHTML =
-  `<a class="text-link" href="${escapeHtml(SYLLABUS_URL)}">${SYLLABUS_YEAR}年度の公式シラバス ${icon('arrow', 15)}</a>`;
-renderFoundation();
 renderCourses();

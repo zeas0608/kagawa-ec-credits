@@ -1,100 +1,51 @@
-import { CERTIFICATION_GROUPS, getToeicOption, TOEIC_GROUP_ID } from './cert-data.js';
+import { CERTIFICATION_GROUPS } from './cert-data.js';
 import {
-  CERT_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, matchesSearch, mountShell,
+  CERT_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, mountShell,
   saveOpenSections, updateState,
 } from './common.js';
 import {
+  addExternalCredit,
   calculateCredits,
-  EXTERNAL_CREDIT_SLOTS,
   isExternalCreditNameDuplicate,
   removeExternalCredit,
-  setCertificationStatus,
-  setToeic,
+  setCertificationEarned,
   STORAGE_KEY,
   updateExternalCredit,
 } from './model.js';
 
-const statuses = [
-  ['unearned', '未取得'],
-  ['passed', '合格済み・学校未認定'],
-  ['recognized', '学校認定済み'],
-];
-const searchAliases = {
-  実用英語技能検定: '英検',
-  日本漢字能力検定: '漢検',
-  実用数学技能検定: '数検',
-};
-const search = document.querySelector('#cert-search');
-const category = document.querySelector('#cert-category');
 const certList = document.querySelector('#cert-list');
 const externalList = document.querySelector('#external-list');
-
-function statusSelect(label, status, attributes = '') {
-  const options = statuses.map(([value, text]) => (
-    `<option value="${value}"${status === value ? ' selected' : ''}>${text}</option>`
-  ));
-  return `<select aria-label="${escapeHtml(label)}" data-status="${status}" ${attributes}>${options.join('')}</select>`;
-}
-
-function isToeic(option) {
-  return Number.isInteger(option.minScore);
-}
-
-function matchesOption(option, query) {
-  const normalizedQuery = query.normalize('NFKC').trim();
-  if (isToeic(option) && /^\d{3}(?:\s*点)?$/.test(normalizedQuery)) {
-    return getToeicOption(Number.parseInt(normalizedQuery, 10))?.id === option.id;
-  }
-  return matchesSearch(`${option.name} ${searchAliases[option.name] ?? ''} ${option.condition ?? ''}`, query);
-}
+const externalAdd = document.querySelector('#external-add');
+const externalEditor = document.querySelector('#external-editor');
+const externalName = document.querySelector('#external-name');
+const externalCategory = document.querySelector('#external-category');
+const externalCredits = document.querySelector('#external-credits-input');
+const externalMessage = document.querySelector('#external-message');
+const externalDelete = document.querySelector('#external-delete');
+let editingExternalId = null;
 
 function renderOption(option, state) {
-  const status = state.certifications[option.id] ?? 'unearned';
+  const earned = state.certifications[option.id] === true;
   const condition = option.condition === 'なし' ? '' : option.condition;
   const optionLabel = [option.name, condition].filter(Boolean).join(' ');
-  const control = isToeic(option) && status === 'unearned'
-    ? '<span class="cert-unearned">未取得</span>'
-    : statusSelect(`${optionLabel}の取得状況`, status, `data-cert-option="${escapeHtml(option.id)}"`);
 
   return `
-    <li class="subject-row cert-option" data-status="${status}">
+    <li class="subject-row cert-option" data-earned="${earned}">
       <div class="subject-main">
         <span class="cert-option-name">${escapeHtml(option.name)}</span>
         ${condition ? `<span class="muted cert-condition">${escapeHtml(condition)}</span>` : ''}
       </div>
       <div class="subject-actions cert-option-actions">
         <span class="cert-option-credits">${escapeHtml(option.credits)} 単位</span>
-        ${control}
+        <label class="cert-check">
+          <input type="checkbox" data-cert-option="${escapeHtml(option.id)}" aria-label="取得 ${escapeHtml(optionLabel)}" ${earned ? 'checked' : ''}>
+          <span>取得</span>
+        </label>
       </div>
     </li>`;
 }
 
-function renderToeic({ score, online }) {
-  return `
-    <div class="cert-toeic">
-      <h3>TOEIC Listening &amp; Reading Test の点数で判定</h3>
-      <div class="cert-toeic-fields">
-        <label class="field" for="toeic-score">
-          <span>点数</span>
-          <input id="toeic-score" type="number" min="10" max="990" step="1" inputmode="numeric"
-            value="${escapeHtml(score ?? '')}" placeholder="例：450" aria-describedby="toeic-result-text">
-        </label>
-        <label class="field" for="toeic-type">
-          <span>テストの種類</span>
-          <select id="toeic-type">
-            <option value="eligible" ${online ? '' : 'selected'}>公開テスト／IPテスト（マークシート方式）</option>
-            <option value="online" ${online ? 'selected' : ''}>IPテスト（オンライン）</option>
-          </select>
-        </label>
-      </div>
-      <div class="cert-toeic-result">
-        <p class="muted" id="toeic-result-text" aria-live="polite"></p>
-        <div id="toeic-result-control"></div>
-      </div>
-    </div>`;
-}
-
-function renderGroup(group, options, state, totals, expanded) {
+function renderGroup(group, state, totals, expanded) {
   return `
     <details class="subject-group cert-group" data-cert-group="${escapeHtml(group.id)}" ${expanded ? 'open' : ''}>
       <summary class="cert-group-summary">
@@ -105,60 +56,16 @@ function renderGroup(group, options, state, totals, expanded) {
         <span class="cert-count cert-group-total">${totals.certification.groups[group.id] ?? 0} 単位</span>
         <span class="cert-chevron">${icon('chevron', 17)}</span>
       </summary>
-      ${group.id === TOEIC_GROUP_ID && options.some(isToeic) ? renderToeic(state.toeic) : ''}
-      <ul class="subject-list cert-options">${options.map(option => renderOption(option, state)).join('')}</ul>
+      <ul class="subject-list cert-options">${group.options.map(option => renderOption(option, state)).join('')}</ul>
     </details>`;
 }
 
 function renderCertList(state = getState()) {
-  const query = search.value.trim();
   const totals = calculateCredits(state);
   const openGroups = getOpenSections(CERT_SECTIONS_KEY);
-  const results = [];
-  for (const group of CERTIFICATION_GROUPS) {
-    if (category.value && category.value !== group.category) continue;
-    const options = matchesSearch(group.name, query)
-      ? group.options
-      : group.options.filter(option => matchesOption(option, query));
-    if (options.length) {
-      results.push(renderGroup(group, options, state, totals, openGroups.has(group.id)));
-    }
-  }
-  certList.innerHTML = results.join('') || '<p class="empty-state" role="status">該当する資格・検定はありません。</p>';
-  renderToeicResult(state);
-}
-
-function readToeicFields() {
-  const score = document.querySelector('#toeic-score');
-  return {
-    rawScore: score.value,
-    score: score.value === '' || !score.validity.valid ? null : score.valueAsNumber,
-    invalid: score.validity.badInput || !score.validity.valid,
-    online: document.querySelector('#toeic-type').value === 'online',
-  };
-}
-
-function renderToeicResult(state) {
-  const result = document.querySelector('#toeic-result-text');
-  if (!result) return;
-  const control = document.querySelector('#toeic-result-control');
-  const { rawScore, score, invalid, online } = readToeicFields();
-  const option = getToeicOption(score);
-  control.replaceChildren();
-
-  if (online) {
-    result.textContent = 'IPテスト（オンライン）は単位認定の対象外です。';
-  } else if (invalid) {
-    result.textContent = '10〜990の整数を入力してください。';
-  } else if (!rawScore) {
-    result.textContent = '点数を入力すると、対象区分と単位数が表示されます。';
-  } else if (!option) {
-    result.textContent = 'この点数は単位認定の対象外です。';
-  } else {
-    result.textContent = `${option.condition}（${option.credits} 単位）`;
-    const status = state.certifications[option.id] ?? 'unearned';
-    control.innerHTML = statusSelect('TOEICの取得状況', status, `data-toeic-option="${escapeHtml(option.id)}"`);
-  }
+  certList.innerHTML = CERTIFICATION_GROUPS.map(group => (
+    renderGroup(group, state, totals, openGroups.has(group.id))
+  )).join('');
 }
 
 function renderTotals(state) {
@@ -172,79 +79,78 @@ function renderTotals(state) {
   }
 }
 
-function renderExternalSlot(slot, entry) {
-  const id = escapeHtml(slot.id);
-  const name = escapeHtml(slot.name);
+function renderExternalEntry(entry) {
+  const name = escapeHtml(entry.name);
   return `
-    <li class="subject-row cert-external-row" data-external-slot="${id}">
-      <h4>${name}</h4>
-      <div class="cert-external-fields">
-        <label class="field" for="${id}-name">
-          <span>科目名</span>
-          <input id="${id}-name" type="text" value="${escapeHtml(entry?.name ?? '')}" placeholder="認定された科目名"
-            aria-label="${name}の科目名" aria-describedby="${id}-message" autocomplete="off" data-external-name>
-        </label>
-        <label class="field" for="${id}-credits">
-          <span>認定単位数</span>
-          <input id="${id}-credits" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(entry?.credits ?? '')}"
-            placeholder="0" aria-label="${name}の認定単位数" aria-describedby="${id}-message" data-external-credits>
-        </label>
-        <button type="button" class="button secondary cert-external-clear" aria-label="${name}の入力をクリア" data-external-clear>クリア</button>
+    <li class="subject-row cert-external-row" data-external-id="${escapeHtml(entry.id)}">
+      <div class="cert-external-details">
+        <span class="cert-option-name">${name}</span>
+        <span class="tag ${escapeHtml(entry.category)}">${categoryLabel(entry.category)}</span>
       </div>
-      <p id="${id}-message" class="cert-external-message" aria-live="polite" hidden></p>
+      <div class="subject-actions">
+        <span class="cert-count">${entry.credits} 単位</span>
+        <button type="button" class="button secondary" aria-label="${name}を編集" data-external-edit>編集</button>
+      </div>
     </li>`;
 }
 
 function renderExternalList(state = getState()) {
-  externalList.innerHTML = ['general', 'specialized'].map(categoryId => `
-    <section class="panel cert-external-group">
-      <h3>${categoryLabel(categoryId)}</h3>
-      <ul class="subject-list cert-options">
-        ${EXTERNAL_CREDIT_SLOTS.filter(slot => slot.category === categoryId).map(slot => (
-          renderExternalSlot(slot, state.external.find(entry => entry.id === slot.id))
-        )).join('')}
-      </ul>
-    </section>`).join('');
+  externalList.hidden = state.external.length === 0;
+  externalList.innerHTML = state.external.map(renderExternalEntry).join('');
 }
 
-function showExternalMessage(row, message, entry) {
-  const output = row.querySelector('.cert-external-message');
-  const text = message && entry ? `${message} 変更前の ${entry.credits} 単位を集計しています。` : message;
-  output.hidden = !text;
-  output.textContent = text;
+function showExternalMessage(message = '') {
+  externalMessage.hidden = !message;
+  externalMessage.textContent = message;
 }
 
-function saveExternalRow(row) {
-  const id = row.dataset.externalSlot;
-  const name = row.querySelector('[data-external-name]').value.trim();
-  const creditField = row.querySelector('[data-external-credits]');
-  const credits = creditField.valueAsNumber;
-  const state = getState();
-  const entry = state.external.find(item => item.id === id);
+function openExternalEditor(entry) {
+  editingExternalId = entry?.id ?? null;
+  externalName.value = entry?.name ?? '';
+  externalCategory.value = entry?.category ?? '';
+  externalCredits.value = entry?.credits ?? '';
+  externalDelete.hidden = !entry;
+  showExternalMessage();
+  externalEditor.hidden = false;
+  externalAdd.setAttribute('aria-expanded', 'true');
+  externalName.focus();
+}
 
-  if (!name && !creditField.value && !creditField.validity.badInput && !entry) {
-    showExternalMessage(row, '', entry);
-  } else if (!name || !creditField.value || !creditField.validity.valid || !Number.isSafeInteger(credits)) {
-    showExternalMessage(row, '科目名と1以上の整数を入力してください。', entry);
-  } else if (isExternalCreditNameDuplicate(state, id, name)) {
-    showExternalMessage(row, '登録済みの科目・資格と同じ名称です。', entry);
-  } else {
-    let accepted;
-    const next = updateState(draft => { accepted = updateExternalCredit(draft, id, { name, credits }); });
-    showExternalMessage(row, accepted ? '' : '入力した単位数を登録できません。', entry);
-    renderTotals(next);
+function closeExternalEditor(focusId = editingExternalId) {
+  editingExternalId = null;
+  externalEditor.hidden = true;
+  externalAdd.setAttribute('aria-expanded', 'false');
+  const row = [...externalList.children].find(item => item.dataset.externalId === focusId);
+  (row?.querySelector('[data-external-edit]') ?? externalAdd).focus();
+}
+
+function saveExternalEntry(event) {
+  event.preventDefault();
+  const id = editingExternalId;
+  const name = externalName.value.trim();
+  const category = externalCategory.value;
+  const credits = externalCredits.valueAsNumber;
+  if (!name || !Number.isSafeInteger(credits)) {
+    showExternalMessage('科目名と1以上の整数を入力してください。');
+    return;
   }
-}
-
-function saveStatus(control) {
-  const id = control.dataset.toeicOption ?? control.dataset.certOption;
-  const state = updateState(draft => { setCertificationStatus(draft, id, control.value); });
-  renderCertList(state);
+  if (isExternalCreditNameDuplicate(getState(), id, name)) {
+    showExternalMessage('登録済みの科目・資格と同じ名称です。');
+    return;
+  }
+  let savedId = null;
+  const state = updateState(draft => {
+    const values = { name, category, credits };
+    if (!id) savedId = addExternalCredit(draft, values);
+    else if (draft.external.some(entry => entry.id === id) && updateExternalCredit(draft, id, values)) savedId = id;
+  });
+  if (!savedId) {
+    showExternalMessage('入力した単位を保存できません。');
+    return;
+  }
+  renderExternalList(state);
   renderTotals(state);
-  const matchingControl = [...certList.querySelectorAll('select')].find(item => (
-    control.dataset.toeicOption ? item.dataset.toeicOption === id : item.dataset.certOption === id
-  ));
-  (matchingControl ?? document.querySelector('#toeic-score'))?.focus({ preventScroll: true });
+  closeExternalEditor(savedId);
 }
 
 mountShell('certifications');
@@ -252,8 +158,6 @@ renderCertList();
 renderExternalList();
 renderTotals(getState());
 
-search.addEventListener('input', () => renderCertList());
-category.addEventListener('change', () => renderCertList());
 certList.addEventListener('click', event => {
   const summary = event.target.closest('.cert-group-summary');
   if (!summary || event.defaultPrevented) return;
@@ -264,41 +168,35 @@ certList.addEventListener('click', event => {
   else openGroups.add(id);
   saveOpenSections(CERT_SECTIONS_KEY, openGroups);
 });
-certList.addEventListener('input', event => {
-  if (event.target.id !== 'toeic-score') return;
-  const { score, online } = readToeicFields();
-  const state = updateState(draft => { setToeic(draft, score, online); });
-  renderToeicResult(state);
-});
 certList.addEventListener('change', event => {
   const control = event.target;
-  if (control.id === 'toeic-type') {
-    const { score, online } = readToeicFields();
-    const state = updateState(draft => { setToeic(draft, score, online); });
-    renderToeicResult(state);
-  } else if (control.hasAttribute('data-toeic-option')) {
-    const { score, online } = readToeicFields();
-    if (!online && getToeicOption(score)?.id === control.dataset.toeicOption) saveStatus(control);
-  } else if (control.hasAttribute('data-cert-option')) {
-    saveStatus(control);
+  if (!control.hasAttribute('data-cert-option')) return;
+  const state = updateState(draft => {
+    setCertificationEarned(draft, control.dataset.certOption, control.checked);
+  });
+  for (const input of control.closest('[data-cert-group]').querySelectorAll('[data-cert-option]')) {
+    input.checked = state.certifications[input.dataset.certOption] === true;
+    input.closest('.cert-option').dataset.earned = input.checked;
   }
+  renderTotals(state);
 });
 
-externalList.addEventListener('change', event => {
-  if (event.target.matches('[data-external-name], [data-external-credits]')) {
-    saveExternalRow(event.target.closest('[data-external-slot]'));
-  }
-});
+externalAdd.addEventListener('click', () => openExternalEditor());
+document.querySelector('#external-cancel').addEventListener('click', () => closeExternalEditor());
+externalEditor.addEventListener('submit', saveExternalEntry);
 externalList.addEventListener('click', event => {
-  const button = event.target.closest('[data-external-clear]');
+  const button = event.target.closest('[data-external-edit]');
   if (!button) return;
-  const row = button.closest('[data-external-slot]');
-  const state = updateState(draft => { removeExternalCredit(draft, row.dataset.externalSlot); });
-  row.querySelector('[data-external-name]').value = '';
-  row.querySelector('[data-external-credits]').value = '';
-  showExternalMessage(row, '');
+  const id = button.closest('[data-external-id]').dataset.externalId;
+  const entry = getState().external.find(item => item.id === id);
+  if (entry) openExternalEditor(entry);
+});
+externalDelete.addEventListener('click', () => {
+  if (!editingExternalId || !window.confirm('この認定単位を削除しますか？')) return;
+  const state = updateState(draft => { removeExternalCredit(draft, editingExternalId); });
+  renderExternalList(state);
   renderTotals(state);
-  row.querySelector('[data-external-name]').focus();
+  closeExternalEditor();
 });
 
 function syncStoredData() {

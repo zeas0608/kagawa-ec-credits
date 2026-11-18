@@ -2,22 +2,26 @@ import { CERTIFICATION_GROUPS } from './cert-data.js';
 import { COURSES, INITIAL_REQUIRED_BY_GRADE, LOWER_REQUIRED_COURSES } from './course-data.js';
 import { NEW_COURSE_IDS, PREVIOUS_COURSE_ALIASES } from './course-migration.js';
 
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 const COURSE_ENROLLMENT_STATE_VERSION = 1;
 const PREVIOUS_SYLLABUS_STATE_VERSION = 2;
+const PREVIOUS_STATE_VERSION = 3;
 export const STORAGE_KEY = 'kagawa-kosen-ec-credit-tracker';
 
-export const EXTERNAL_CREDIT_SLOTS = Object.freeze([
-  { id: 'external-general-a', name: '学外の一般科目A', category: 'general' },
-  { id: 'external-general-b', name: '学外の一般科目B', category: 'general' },
-  { id: 'external-general-c', name: '学外の一般科目C', category: 'general' },
-  { id: 'external-specialized-a', name: '学外の専門科目A', category: 'specialized' },
-  { id: 'external-specialized-b', name: '学外の専門科目B', category: 'specialized' },
-  { id: 'external-specialized-c', name: '学外の専門科目C', category: 'specialized' },
+const previousExternalCategories = new Map([
+  ['external-general-a', 'general'],
+  ['external-general-b', 'general'],
+  ['external-general-c', 'general'],
+  ['external-specialized-a', 'specialized'],
+  ['external-specialized-b', 'specialized'],
+  ['external-specialized-c', 'specialized'],
 ]);
+const externalEntryIdPattern = /^external-entry-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 const certifications = CERTIFICATION_GROUPS.flatMap(group => group.options);
-const certificationIds = new Set(certifications.map(option => option.id));
+const certificationGroupsByOptionId = new Map(CERTIFICATION_GROUPS.flatMap(group => (
+  group.options.map(option => [option.id, group])
+)));
 const coursesById = new Map(COURSES.map(course => [course.id, course]));
 const fixedCreditUpperBound = [...COURSES, ...LOWER_REQUIRED_COURSES, ...certifications]
   .reduce((total, item) => total + item.credits, 0);
@@ -38,7 +42,6 @@ export function createState() {
     version: STATE_VERSION,
     courses: {},
     certifications: {},
-    toeic: { score: null, online: false },
     external: [],
   };
 }
@@ -62,25 +65,25 @@ export function setCourseEarned(state, course, earned) {
   return true;
 }
 
-export function setCertificationStatus(state, id, status) {
-  if (!certificationIds.has(id)) return false;
+export function setCertificationEarned(state, id, earned) {
+  const group = certificationGroupsByOptionId.get(id);
+  if (!group || typeof earned !== 'boolean') return false;
 
-  if (status === 'unearned') {
-    delete state.certifications[id];
-  } else if (status === 'passed' || status === 'recognized') {
-    state.certifications[id] = status;
+  if (earned) {
+    for (const option of group.options) delete state.certifications[option.id];
+    state.certifications[id] = true;
   } else {
-    return false;
+    delete state.certifications[id];
   }
   return true;
 }
 
-export function setToeic(state, score, online) {
-  if (typeof online !== 'boolean') return false;
-  if (score !== null && (!Number.isInteger(score) || score < 10 || score > 990)) return false;
-
-  state.toeic = { score, online };
-  return true;
+function highestEarnedOption(group, isEarned) {
+  let best;
+  for (const option of group.options) {
+    if (isEarned(option.id) && (!best || option.credits > best.credits)) best = option;
+  }
+  return best;
 }
 
 export function isExternalCreditNameDuplicate(state, id, name) {
@@ -90,9 +93,9 @@ export function isExternalCreditNameDuplicate(state, id, name) {
     state.external.some(record => record.id !== id && normalizeName(record.name) === normalized);
 }
 
-export function updateExternalCredit(state, id, { name, credits }) {
-  const slot = EXTERNAL_CREDIT_SLOTS.find(item => item.id === id);
-  if (!slot || typeof name !== 'string' || !name.trim() ||
+function writeExternalCredit(state, { id, name, category, credits }) {
+  if ((category !== 'general' && category !== 'specialized') ||
+      typeof name !== 'string' || !name.trim() ||
       !Number.isSafeInteger(credits) || credits <= 0 ||
       isExternalCreditNameDuplicate(state, id, name)) {
     return false;
@@ -103,7 +106,7 @@ export function updateExternalCredit(state, id, { name, credits }) {
   ), 0);
   if (!Number.isSafeInteger(fixedCreditUpperBound + existingCredits + credits)) return false;
 
-  const record = { id, name: name.trim(), category: slot.category, credits };
+  const record = { id, name: name.trim(), category, credits };
   const index = state.external.findIndex(item => item.id === id);
   if (index >= 0) {
     state.external[index] = record;
@@ -111,6 +114,23 @@ export function updateExternalCredit(state, id, { name, credits }) {
     state.external.push(record);
   }
   return true;
+}
+
+export function addExternalCredit(state, { name, category, credits }) {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (!uuid) return null;
+
+  const id = `external-entry-${uuid}`;
+  if (state.external.some(record => record.id === id)) return null;
+
+  return writeExternalCredit(state, { id, name, category, credits }) ? id : null;
+}
+
+export function updateExternalCredit(state, id, { name, category, credits }) {
+  const current = state.external.find(record => record.id === id);
+  if (!current) return false;
+
+  return writeExternalCredit(state, { id, name, category: category ?? current.category, credits });
 }
 
 export function removeExternalCredit(state, id) {
@@ -135,7 +155,8 @@ export function loadState(storage) {
     const saved = parseState((storage ?? globalThis.localStorage).getItem(STORAGE_KEY));
     const hadEnrollment = saved?.version === COURSE_ENROLLMENT_STATE_VERSION;
     const hadPreviousSyllabus = hadEnrollment || saved?.version === PREVIOUS_SYLLABUS_STATE_VERSION;
-    if (saved?.version !== STATE_VERSION && !hadPreviousSyllabus) return state;
+    const hadLegacyFormat = hadPreviousSyllabus || saved?.version === PREVIOUS_STATE_VERSION;
+    if (saved?.version !== STATE_VERSION && !hadLegacyFormat) return state;
 
     for (const [id, record] of Object.entries(saved.courses ?? {})) {
       if (record?.earned !== true) continue;
@@ -150,14 +171,24 @@ export function loadState(storage) {
       setCourseEarned(state, course, true);
     }
 
-    for (const id of certificationIds) {
-      setCertificationStatus(state, id, saved.certifications?.[id]);
+    const wasCertificationEarned = id => {
+      const status = saved.certifications?.[id];
+      return hadLegacyFormat ? (status === 'passed' || status === 'recognized') : status === true;
+    };
+    for (const group of CERTIFICATION_GROUPS) {
+      const best = highestEarnedOption(group, wasCertificationEarned);
+      if (best) setCertificationEarned(state, best.id, true);
     }
-    if (saved.toeic) setToeic(state, saved.toeic.score, saved.toeic.online);
 
     if (Array.isArray(saved.external)) {
       for (const record of saved.external) {
-        if (record) updateExternalCredit(state, record.id, record);
+        if (typeof record?.id !== 'string') continue;
+        const previousCategory = previousExternalCategories.get(record.id);
+        if (hadLegacyFormat && !previousCategory) continue;
+        if (!previousCategory && !externalEntryIdPattern.test(record.id)) continue;
+
+        const category = hadLegacyFormat ? previousCategory : record.category;
+        writeExternalCredit(state, { ...record, category });
       }
     }
   } catch {
@@ -247,12 +278,7 @@ export function calculateCredits(state, {
 
   const groups = {};
   const certification = sumCredits(certificationGroups.map(group => {
-    let credits = 0;
-    for (const option of group.options) {
-      if (state.certifications[option.id] === 'recognized') {
-        credits = Math.max(credits, option.credits);
-      }
-    }
+    const credits = highestEarnedOption(group, id => state.certifications[id] === true)?.credits ?? 0;
     groups[group.id] = credits;
     return { category: group.category, credits };
   }));

@@ -1,7 +1,5 @@
 // 香川高専「香川高等専門学校以外の教育施設等における学修に関する規程」別表
 // https://www.kagawa-nct.ac.jp/general_affairs/rules/05-04.pdf#page=3
-export const TOEIC_GROUP_ID = 'toeic';
-
 function certificationGroup(id, name, category, rows) {
   const options = rows.map(([id, condition, credits, qualification = name, scoreBounds]) => ({
     id,
@@ -15,7 +13,7 @@ function certificationGroup(id, name, category, rows) {
 
 // 各グループは別表の太枠1つに対応する。名称が同じでも太枠が別なら別グループとする。
 export const CERTIFICATION_GROUPS = [
-  certificationGroup(TOEIC_GROUP_ID, 'TOEIC・実用英語技能検定', 'general', [
+  certificationGroup('toeic', 'TOEIC・実用英語技能検定', 'general', [
     ['toeic-730', '730点以上', 6, 'TOEIC', { minScore: 730, maxScore: 990 }],
     ['toeic-600', '600〜729点', 4, 'TOEIC', { minScore: 600, maxScore: 729 }],
     ['toeic-450', '450〜599点', 2, 'TOEIC', { minScore: 450, maxScore: 599 }],
@@ -138,10 +136,3 @@ export const CERTIFICATION_GROUPS = [
     ['intellectual-property-3', '3級', 2],
   ]),
 ];
-
-const toeicOptions = CERTIFICATION_GROUPS.find(group => group.id === TOEIC_GROUP_ID).options;
-
-export function getToeicOption(score) {
-  if (!Number.isInteger(score)) return undefined;
-  return toeicOptions.find(option => option.minScore <= score && score <= option.maxScore);
-}

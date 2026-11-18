@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CERTIFICATION_GROUPS, getToeicOption } from '../js/cert-data.js';
+import { CERTIFICATION_GROUPS } from '../js/cert-data.js';
 import { COURSES, INITIAL_REQUIRED_BY_GRADE, LOWER_REQUIRED_COURSES } from '../js/course-data.js';
 import { NEW_COURSE_IDS, PREVIOUS_COURSE_ALIASES } from '../js/course-migration.js';
 import {
+  addExternalCredit,
   calculateCredits,
   createState,
   getCourseStatus,
@@ -12,9 +13,8 @@ import {
   removeExternalCredit,
   resetState,
   saveState,
-  setCertificationStatus,
+  setCertificationEarned,
   setCourseEarned,
-  setToeic,
   STORAGE_KEY,
   updateExternalCredit,
 } from '../js/model.js';
@@ -29,9 +29,16 @@ function earn(state, course) {
   assert.equal(setCourseEarned(state, course, true), true);
 }
 
+function setExternal(state, name, category, credits) {
+  const current = state.external.find(record => record.name === name);
+  const values = { name, category, credits };
+  if (current) assert.equal(updateExternalCredit(state, current.id, values), true);
+  else assert.ok(addExternalCredit(state, values));
+}
+
 function external(state, general, specialized) {
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外研修（一般）', credits: general }), true);
-  assert.equal(updateExternalCredit(state, 'external-specialized-a', { name: '学外研究（専門）', credits: specialized }), true);
+  setExternal(state, '学外研修（一般）', 'general', general);
+  setExternal(state, '学外研究（専門）', 'specialized', specialized);
 }
 
 function createMemoryStorage() {
@@ -92,7 +99,7 @@ test('promotion requires both 128 through year 4 and the year-4 laboratory', () 
   const yearFive = COURSES.find(course => course.grade === 5 && course.required);
   const laboratory = courseById('g4-253125');
   earn(state, yearFive);
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 32 }), true);
+  setExternal(state, '学外集中講座', 'general', 32);
   let result = calculateCredits(state);
   assert.ok(result.total.total >= 128);
   assert.deepEqual(result.conditions.promotion, {
@@ -102,7 +109,7 @@ test('promotion requires both 128 through year 4 and the year-4 laboratory', () 
   });
 
   earn(state, laboratory);
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 27 }), true);
+  setExternal(state, '学外集中講座', 'general', 27);
   result = calculateCredits(state);
   assert.ok(result.total.total >= 128);
   assert.deepEqual(result.conditions.promotion, {
@@ -111,7 +118,7 @@ test('promotion requires both 128 through year 4 and the year-4 laboratory', () 
     met: false,
   });
 
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 28 }), true);
+  setExternal(state, '学外集中講座', 'general', 28);
   result = calculateCredits(state);
   assert.deepEqual(result.conditions.promotion, {
     credits: { current: 128, required: 128, remaining: 0, met: true },
@@ -203,40 +210,45 @@ test('graduation reports remaining mandatory courses separately from its credit 
   assert.equal(graduation.met, true);
 });
 
-test('TOEIC score boundaries map to the official bands', () => {
-  for (const [score, credits] of [
-    [399, undefined], [400, 1], [449, 1], [450, 2], [599, 2],
-    [600, 4], [729, 4], [730, 6], [990, 6], [991, undefined],
-  ]) {
-    assert.equal(getToeicOption(score)?.credits, credits);
-  }
-  assert.equal(getToeicOption(450.5), undefined);
+test('the fixed TOEIC score bands and credits remain available as options', () => {
+  const group = CERTIFICATION_GROUPS.find(item => item.id === 'toeic');
+  assert.deepEqual(group.options
+    .filter(option => option.name === 'TOEIC')
+    .map(option => [option.minScore, option.maxScore, option.credits]), [
+    [730, 990, 6], [600, 729, 4], [450, 599, 2], [400, 449, 1],
+  ]);
 });
 
-test('recognized options add only their thick group maximum while separate groups add', () => {
+test('an acquired option replaces the previous option in its thick group', () => {
   const state = createState();
-  assert.equal(setCertificationStatus(state, 'toeic-400', 'recognized'), true);
-  assert.equal(setCertificationStatus(state, 'toeic-450', 'recognized'), true);
-  assert.equal(setCertificationStatus(state, 'toeic-730', 'passed'), true);
+  assert.equal(setCertificationEarned(state, 'toeic-400', true), true);
+  assert.equal(setCertificationEarned(state, 'toeic-450', true), true);
+  assert.deepEqual(state.certifications, { 'toeic-450': true });
   assert.equal(calculateCredits(state).certification.groups.toeic, 2);
-  assert.equal(calculateCredits(state).certification.total, 2);
 
-  assert.equal(setCertificationStatus(state, 'eiken-pre-1', 'recognized'), true);
-  assert.equal(setCertificationStatus(state, 'kanken-2-or-higher', 'recognized'), true);
+  assert.equal(setCertificationEarned(state, 'eiken-pre-1', true), true);
+  assert.equal(setCertificationEarned(state, 'kanken-2-or-higher', true), true);
   const result = calculateCredits(state);
+  assert.deepEqual(state.certifications, { 'eiken-pre-1': true, 'kanken-2-or-higher': true });
   assert.equal(result.certification.groups.toeic, 4);
   assert.equal(result.certification.groups.kanken, 2);
   assert.equal(result.certification.total, 6);
   assert.equal(result.conditions.promotion.credits.current, 102);
+
+  assert.equal(setCertificationEarned(state, 'toeic-400', true), true);
+  assert.equal(setCertificationEarned(state, 'eiken-pre-1', false), true);
+  assert.deepEqual(state.certifications, { 'toeic-400': true, 'kanken-2-or-higher': true });
+  assert.equal(calculateCredits(state).certification.total, 3);
 });
 
-test('passing a qualification without school recognition contributes zero', () => {
+test('checking or clearing a qualification immediately updates specialized credits', () => {
   const state = createState();
-  assert.equal(setCertificationStatus(state, 'ipa-ap', 'passed'), true);
+  assert.equal(setCertificationEarned(state, 'unknown', true), false);
+  assert.equal(setCertificationEarned(state, 'ipa-ap', 'passed'), false);
   assert.equal(calculateCredits(state).certification.total, 0);
-  assert.equal(setCertificationStatus(state, 'ipa-ap', 'recognized'), true);
+  assert.equal(setCertificationEarned(state, 'ipa-ap', true), true);
   assert.equal(calculateCredits(state).conditions.recommendation.specialized.current, 38);
-  assert.equal(setCertificationStatus(state, 'ipa-ap', 'unearned'), true);
+  assert.equal(setCertificationEarned(state, 'ipa-ap', false), true);
   assert.equal(calculateCredits(state).certification.total, 0);
 });
 
@@ -271,25 +283,48 @@ test('namesake course listings are independent unless explicitly grouped', () =>
   assert.equal(calculateCredits(state, { courses: [first, second] }).total.total, 100);
 });
 
-test('external recognition slots enforce categories, real unit numbers and distinct names', () => {
+test('external recognition enforces categories, whole credit numbers and distinct names', () => {
   const state = createState();
-  const general = 'external-general-a';
-  const specialized = 'external-specialized-a';
-  assert.equal(isExternalCreditNameDuplicate(state, general, ' ＴＯＥＩＣ '), true);
-  assert.equal(isExternalCreditNameDuplicate(state, general, '電 気 回 路 I'), true);
-  assert.equal(updateExternalCredit(state, general, { name: 'TOEIC', credits: 2 }), false);
+  assert.equal(isExternalCreditNameDuplicate(state, null, ' ＴＯＥＩＣ '), true);
+  assert.equal(isExternalCreditNameDuplicate(state, null, '電 気 回 路 I'), true);
+  assert.equal(addExternalCredit(state, { name: 'TOEIC', category: 'general', credits: 2 }), null);
   for (const credits of [-1, 0, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
-    assert.equal(updateExternalCredit(state, general, { name: '学外研修', credits }), false);
+    assert.equal(addExternalCredit(state, { name: '学外研修', category: 'general', credits }), null);
   }
+  assert.equal(addExternalCredit(state, { name: '学外研修', category: 'other', credits: 1 }), null);
+  assert.equal(addExternalCredit(state, { name: ' ', category: 'general', credits: 1 }), null);
   assert.equal(updateExternalCredit(state, 'unknown', { name: '学外研修', credits: 3 }), false);
-  assert.equal(updateExternalCredit(state, general, { name: ' 学外研修 ', category: 'specialized', credits: 3 }), true);
+  const general = addExternalCredit(state, { name: ' 学外研修 ', category: 'general', credits: 3 });
+  assert.ok(general);
+  const specialized = addExternalCredit(state, { name: '学外研究', category: 'specialized', credits: 4 });
+  assert.ok(specialized);
   assert.equal(updateExternalCredit(state, specialized, { name: '学外 研修', credits: 4 }), false);
-  assert.deepEqual(calculateCredits(state).external, { general: 3, specialized: 0, total: 3 });
+  assert.equal(addExternalCredit(state, { name: '学 外 研 修', category: 'specialized', credits: 1 }), null);
+  assert.deepEqual(calculateCredits(state).external, { general: 3, specialized: 4, total: 7 });
   assert.equal(removeExternalCredit(state, general), true);
-  assert.equal(calculateCredits(state).external.total, 0);
+  assert.equal(calculateCredits(state).external.total, 4);
 });
 
-test('versioned localStorage round-trips and resets all recognized and earned inputs', () => {
+test('additional external entries retain unique IDs and support reclassification and removal', () => {
+  const state = createState();
+  const storage = createMemoryStorage();
+  const ids = [];
+  for (let index = 1; index <= 8; index += 1) {
+    const id = addExternalCredit(state, { name: `外部研修・第${index}期`, category: 'general', credits: index });
+    assert.ok(id);
+    ids.push(id);
+  }
+  assert.equal(new Set(ids).size, 8);
+  assert.deepEqual(calculateCredits(state).external, { general: 36, specialized: 0, total: 36 });
+  assert.equal(updateExternalCredit(state, ids[0], { name: '学外集中研修', credits: 3, category: 'specialized' }), true);
+  assert.equal(removeExternalCredit(state, ids[2]), true);
+  assert.equal(updateExternalCredit(state, ids[2], { name: '学外集中研修', credits: 3 }), false);
+  assert.deepEqual(calculateCredits(state).external, { general: 32, specialized: 3, total: 35 });
+  assert.equal(saveState(state, storage), true);
+  assert.deepEqual(loadState(storage), state);
+});
+
+test('versioned localStorage round-trips and resets all acquired and external inputs', () => {
   const state = createState();
   const storage = createMemoryStorage();
   assert.deepEqual(loadState(storage), state);
@@ -297,18 +332,17 @@ test('versioned localStorage round-trips and resets all recognized and earned in
   earn(state, courseById('g4-253125'));
   earn(state, courseById('g4-253150'));
   earn(state, courseById('g5-253179'));
-  assert.equal(setCertificationStatus(state, 'toeic-450', 'recognized'), true);
-  assert.equal(setToeic(state, 450, false), true);
+  assert.equal(setCertificationEarned(state, 'toeic-450', true), true);
   external(state, 2, 3);
   assert.equal(saveState(state, storage), true);
-  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).version, 3);
+  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).version, 4);
   assert.deepEqual(loadState(storage), state);
   assert.deepEqual(calculateCredits(loadState(storage)), calculateCredits(state));
   assert.deepEqual(resetState(storage), createState());
   assert.deepEqual(loadState(storage), createState());
 });
 
-test('version 1 storage migrates earned courses and preserves recognized credits', () => {
+test('version 1 storage migrates earned courses, qualifications and external credits', () => {
   const storage = createMemoryStorage();
   const legacy = {
     version: 1,
@@ -326,16 +360,16 @@ test('version 1 storage migrates earned courses and preserves recognized credits
   storage.setItem(STORAGE_KEY, JSON.stringify(legacy));
 
   const state = loadState(storage);
-  assert.equal(state.version, 3);
+  assert.equal(state.version, 4);
   assert.deepEqual(state.courses, {
     'g4-253125': { earned: true },
     'g4-251134': { earned: true },
     'g4-253126': { earned: true },
   });
-  assert.deepEqual(state.certifications, legacy.certifications);
-  assert.deepEqual(state.toeic, legacy.toeic);
+  assert.deepEqual(state.certifications, { 'toeic-450': true, 'ipa-ap': true });
+  assert.equal('toeic' in state, false);
   assert.deepEqual(state.external, legacy.external);
-  assert.equal(calculateCredits(state).total.total, 109);
+  assert.equal(calculateCredits(state).total.total, 113);
   assert.equal(saveState(state, storage), true);
   assert.deepEqual(loadState(storage), state);
 });
@@ -365,8 +399,8 @@ test('version 2 acquisitions migrate to the equivalent courses in their listed g
     [yearFour.id]: { earned: true },
     [yearFive.id]: { earned: true },
   });
-  assert.deepEqual(state.certifications, legacy.certifications);
-  assert.deepEqual(state.toeic, legacy.toeic);
+  assert.deepEqual(state.certifications, { 'toeic-450': true });
+  assert.equal('toeic' in state, false);
   assert.deepEqual(state.external, legacy.external);
   const result = calculateCredits(state);
   assert.equal(result.grades[4].total, yearFour.credits);
@@ -376,6 +410,47 @@ test('version 2 acquisitions migrate to the equivalent courses in their listed g
   assert.equal(saveState(state, storage), true);
   assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), state);
   assert.deepEqual(loadState(storage), state);
+});
+
+test('version 3 retains all six external entries and migrates one highest acquired qualification per group', () => {
+  const storage = createMemoryStorage();
+  const legacy = {
+    version: 3,
+    courses: { 'g4-253150': { earned: true } },
+    certifications: {
+      'toeic-400': 'recognized',
+      'toeic-450': 'passed',
+      'eiken-pre-2': 'recognized',
+      'ipa-ap': 'passed',
+    },
+    toeic: { score: 450, online: false },
+    external: ['general', 'specialized'].flatMap(category => (
+      ['a', 'b', 'c'].map((slot, index) => ({
+        id: `external-${category}-${slot}`,
+        name: `外部受講${category}${index + 1}`,
+        category,
+        credits: index + 1,
+      }))
+    )),
+  };
+  storage.setItem(STORAGE_KEY, JSON.stringify(legacy));
+
+  const state = loadState(storage);
+  assert.deepEqual(state.courses, legacy.courses);
+  assert.deepEqual(state.certifications, { 'toeic-450': true, 'ipa-ap': true });
+  assert.deepEqual(calculateCredits(state).certification.groups.toeic, 2);
+  assert.equal('toeic' in state, false);
+  assert.deepEqual(state.external, legacy.external);
+
+  const id = 'external-general-a';
+  assert.equal(updateExternalCredit(state, id, { name: '別の科目名', category: 'specialized', credits: 3 }), true);
+  assert.ok(addExternalCredit(state, { name: '新規の学外講座', category: 'general', credits: 1 }));
+  assert.equal(state.external.length, 7);
+  assert.deepEqual(calculateCredits(state).external, { general: 6, specialized: 9, total: 15 });
+  assert.equal(saveState(state, storage), true);
+  assert.deepEqual(loadState(storage), state);
+  assert.equal(removeExternalCredit(state, id), true);
+  assert.equal(updateExternalCredit(state, id, { name: '別の科目名', category: 'general', credits: 3 }), false);
 });
 
 test('unrecognized records and malformed storage do not affect totals', () => {
@@ -392,7 +467,7 @@ test('unrecognized records and malformed storage do not affect totals', () => {
   assert.deepEqual(loadState(storage), state);
   assert.equal(calculateCredits(loadState(storage)).total.total, 96);
 
-  const future = JSON.stringify({ ...state, version: 4 });
+  const future = JSON.stringify({ ...state, version: 5 });
   storage.setItem(STORAGE_KEY, future);
   assert.deepEqual(loadState(storage), state);
   assert.equal(saveState(state, storage), false);

@@ -1,9 +1,5 @@
 // 香川高専 電気情報工学科（2019年度以降入学者）の公開シラバス。
 // 1〜3年は2025年度の既修課程、4・5年は2026年度の開講科目。
-const syllabusBaseUrl = "https://syllabus.kosen-k.go.jp/Pages";
-const syllabusDepartment = "school_id=39&department_id=32";
-export const SYLLABUS_YEAR = 2026;
-export const SYLLABUS_URL = `${syllabusBaseUrl}/PublicSubjects?${syllabusDepartment}&year=${SYLLABUS_YEAR}&lang=ja`;
 
 // 初期取得単位は2025年度学校要覧の教育課程表と利用者指定の内訳に基づく。
 // 芸術（美術・音楽）は一般必修の芸術2単位として計上。
@@ -39,9 +35,6 @@ const recommendationCodes = new Set([
 ]);
 
 function course([grade, code, name, category, required, credits]) {
-  const academicYear = grade <= 3 ? 2025 : SYLLABUS_YEAR;
-  // 個別シラバスの year には入学年度を指定する。
-  const admissionYear = academicYear - grade + 1;
   return Object.freeze({
     id: `g${grade}-${code}`,
     code,
@@ -50,7 +43,6 @@ function course([grade, code, name, category, required, credits]) {
     category,
     required,
     credits,
-    syllabusUrl: `${syllabusBaseUrl}/PublicSyllabus?${syllabusDepartment}&subject_code=${code}&year=${admissionYear}&lang=ja`,
     equivalentGroup: groupByCode.get(code),
     recommendation: recommendationCodes.has(code),
   });

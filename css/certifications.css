@@ -1,11 +1,3 @@
-.cert-intro {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px 24px;
-}
-
 .cert-overview {
   padding: clamp(18px, 3vw, 26px);
 }
@@ -73,39 +65,10 @@
   font-size: clamp(1.12rem, 3vw, 1.35rem);
 }
 
-.cert-section > p {
-  margin: 6px 0 16px;
-  font-size: .9rem;
-}
-
-.cert-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  margin-block-end: 14px;
-}
-
-.cert-search-input {
-  position: relative;
-}
-
-.cert-search-input > span {
-  display: grid;
-  place-items: center;
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 12px;
-  color: var(--muted, #5b746a);
-  pointer-events: none;
-}
-
-.cert-search-input > input[type="search"] {
-  width: 100%;
-  padding-inline-start: 38px;
-}
-
 .cert-list {
   display: grid;
   gap: 10px;
+  margin-block-start: 12px;
 }
 
 .cert-group {
@@ -180,7 +143,7 @@
   border-top: 1px solid var(--line, #deebe6);
 }
 
-.cert-option[data-status="recognized"] {
+.cert-option[data-earned="true"] {
   background: #f3faf6;
 }
 
@@ -190,14 +153,9 @@
 }
 
 .cert-condition,
-.cert-unearned,
 .cert-option-credits {
   color: var(--muted, #5b746a);
   font-size: .83rem;
-}
-
-.cert-unearned {
-  padding-inline: 12px;
 }
 
 .cert-option-actions {
@@ -207,89 +165,69 @@
   gap: 8px 12px;
 }
 
-.cert-option-actions select,
-.cert-toeic-result select {
+.cert-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
-  width: auto;
-  max-width: 100%;
   font-size: .85rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.cert-option-actions select[data-status="recognized"],
-.cert-toeic-result select[data-status="recognized"] {
-  color: var(--primary-dark);
-  border-color: #abd8c9;
-  font-weight: 700;
-}
-
-.cert-toeic {
-  padding: clamp(14px, 3vw, 22px);
-  border-top: 1px solid var(--line, #deebe6);
-  background: #f3faf6;
-}
-
-.cert-toeic h3,
-.cert-external-group h3 {
-  margin: 0 0 10px;
-  font-size: .95rem;
-}
-
-.cert-toeic-fields,
-.cert-external-fields {
-  display: grid;
-  align-items: end;
-  gap: 10px;
-}
-
-.cert-toeic-fields .field,
-.cert-external-fields .field {
-  min-width: 0;
-}
-
-.cert-toeic-result {
+.cert-external-summary,
+.cert-external-details {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
-  margin-block-start: 12px;
-  min-height: 30px;
+  gap: 6px 12px;
 }
 
-.cert-toeic-result p {
-  margin: 0;
-  font-size: .85rem;
+.cert-external-details {
+  min-width: 0;
 }
 
-.cert-external-group {
-  padding: clamp(14px, 3vw, 22px);
-}
-
-.cert-external-row {
-  display: block;
-  padding: 12px 0;
-  border-top: 1px solid var(--line, #deebe6);
-}
-
-.cert-external-row:last-child {
-  padding-block-end: 0;
-}
-
-.cert-external-row h4 {
-  margin: 0 0 6px;
-  font-size: .9rem;
+.cert-external-editor,
+.cert-external-list {
+  margin-block-start: 10px;
 }
 
 .cert-external-fields {
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
 }
 
 .cert-external-fields > .field:first-child {
   grid-column: 1 / -1;
 }
 
-.cert-external-clear {
-  min-height: 44px;
-  font-size: .82rem;
+.cert-external-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-block-start: 12px;
+}
+
+.cert-external-editor {
+  padding: clamp(14px, 3vw, 22px);
+}
+
+.cert-external-editor-actions .cert-external-delete {
+  color: #982f2f;
+  padding-inline: 5px;
+}
+
+.cert-external-row {
+  flex-wrap: wrap;
+  padding: 8px clamp(14px, 3vw, 22px);
+}
+
+.cert-external-row:first-child {
+  border-top: 0;
 }
 
 .cert-external-message {
@@ -299,26 +237,15 @@
 }
 
 @media (max-width: 599px) {
-  .cert-filters input,
-  .cert-filters select,
-  .cert-toeic-fields input,
-  .cert-toeic-fields select,
-  .cert-external-fields input {
+  .cert-external-fields input,
+  .cert-external-fields select {
     font-size: 1rem;
   }
 }
 
 @media (min-width: 600px) {
-  .cert-filters {
-    grid-template-columns: minmax(200px, 2fr) minmax(160px, 1fr);
-  }
-
-  .cert-toeic-fields {
-    grid-template-columns: minmax(100px, 150px) minmax(0, 320px);
-  }
-
   .cert-external-fields {
-    grid-template-columns: minmax(0, 1fr) minmax(100px, 160px) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(100px, 160px) minmax(100px, 160px);
   }
 
   .cert-external-fields > .field:first-child {

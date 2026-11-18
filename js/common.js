@@ -2,27 +2,26 @@ import { loadState, saveState, resetState } from './model.js';
 
 export const COURSE_SECTIONS_KEY = 'kagawa-kosen-ec-credit-course-sections';
 export const CERT_SECTIONS_KEY = 'kagawa-kosen-ec-credit-cert-sections';
+export const HOME_SECTIONS_KEY = 'kagawa-kosen-ec-credit-home-sections';
 
 const NAV = [
-  { id: 'dashboard', href: './index.html', label: 'ダッシュボード', icon: 'dashboard' },
-  { id: 'courses', href: './courses.html', label: '科目管理', icon: 'book' },
-  { id: 'certifications', href: './certifications.html', label: '資格認定', icon: 'award' },
+  { id: 'dashboard', href: './index.html', label: 'ホーム', icon: 'home' },
+  { id: 'courses', href: './courses.html', label: '授業', icon: 'book' },
+  { id: 'certifications', href: './certifications.html', label: '資格', icon: 'award' },
 ];
 
 const ICON_PATHS = {
   graduation: '<path d="M2 10 12 5l10 5-10 5-10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5m4-2v6"/>',
-  dashboard: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  home: '<path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/>',
   book: '<path d="M12 6v15M3 4h4a5 5 0 0 1 5 5 5 5 0 0 1 5-5h4v14h-4a5 5 0 0 0-5 3 5 5 0 0 0-5-3H3Z"/>',
   award: '<circle cx="12" cy="8" r="5"/><path d="m8 12-2 9 6-3 6 3-2-9"/>',
-  arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   trend: '<path d="m3 17 6-6 4 4 7-8m-5 0h5v5"/>',
   flag: '<path d="M5 21V4m0 1c6-5 9 4 15-1v10c-6 5-9-4-15 1"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5m-18 4 9 5 9-5"/>',
   reset: '<path d="M3 12a9 9 0 1 1 2.7 6.4M3 5v7h7"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>',
-  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
-  search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
+  attention: '<path d="M12 5v9m0 5h.01"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
 };
 
@@ -40,12 +39,6 @@ export function escapeHtml(value) {
 
 export function categoryLabel(category) {
   return category === 'general' ? '一般' : '専門';
-}
-
-export function matchesSearch(text, query) {
-  const normalize = (value) => String(value).normalize('NFKC').toLowerCase();
-  const haystack = normalize(text);
-  return normalize(query).trim().split(/\s+/).every((word) => haystack.includes(word));
 }
 
 export function getOpenSections(key) {
@@ -123,6 +116,7 @@ export function mountShell(active) {
       if (!resetState()) throw new Error('Storage unavailable');
       localStorage.removeItem(COURSE_SECTIONS_KEY);
       localStorage.removeItem(CERT_SECTIONS_KEY);
+      localStorage.removeItem(HOME_SECTIONS_KEY);
       window.location.reload();
     } catch {
       showStorageError('保存データを初期化できませんでした。ブラウザの保存設定をご確認ください。');
