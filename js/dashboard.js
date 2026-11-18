@@ -28,12 +28,20 @@ function conditionRow(label, { current, required, remaining, met }) {
     </li>`;
 }
 
-function judgmentCard(title, caption, symbol, met, rows) {
+function requirementRow(label, status, met) {
+  return `
+    <li class="criterion criterion-check">
+      <span class="criterion-label">${label}</span>
+      <span class="criterion-remaining${met ? ' met' : ''}">${status}</span>
+    </li>`;
+}
+
+function judgmentCard(title, caption, symbol, met, rows, metLabel = '単位数条件達成') {
   return `
     <article class="panel judgment-card">
       <div class="judgment-top">
         <span class="icon-tile">${icon(symbol, 19)}</span>
-        <span class="status${met ? ' met' : ''}"><span></span>${met ? '単位数条件達成' : '未達成'}</span>
+        <span class="status${met ? ' met' : ''}"><span></span>${met ? metLabel : '未達成'}</span>
       </div>
       <h3>${title}</h3>
       <p>${caption}</p>
@@ -44,6 +52,7 @@ function judgmentCard(title, caption, symbol, met, rows) {
 function renderDashboard() {
   const { total, grades, certification, external, conditions } = calculateCredits(getState());
   const { promotion, recommendation, graduation } = conditions;
+  const requiredRemaining = graduation.requiredCoursesRemaining;
   const overallPercent = percent(total.total, graduation.total.required);
   dashboard.innerHTML = `
     <section class="summary-grid" aria-label="確定単位の概要">
@@ -66,22 +75,25 @@ function renderDashboard() {
       </article>
     </section>
     <section class="dashboard-section" aria-labelledby="judgments-heading">
-      <header class="section-heading"><h2 id="judgments-heading">単位数判定</h2></header>
+      <header class="section-heading"><h2 id="judgments-heading">進級・推薦・卒業の確認</h2></header>
       <div class="judgment-grid">
-        ${judgmentCard('進級', '1〜4年の対象単位', 'trend', promotion.met, [
-          conditionRow('対象単位', promotion),
-        ])}
-        ${judgmentCard('学校推薦', '5年次の学校推薦', 'flag', recommendation.met, [
+        ${judgmentCard('5年生への進級', '累計単位と指定科目', 'trend', promotion.met, [
+          conditionRow('1〜4年の累計', promotion.credits),
+          requirementRow('1〜3年の必修', '修得済みとして集計', true),
+          requirementRow('電気情報工学実験Ⅱ', promotion.labEarned ? '修得済み' : '未修得', promotion.labEarned),
+        ], '表示条件達成')}
+        ${judgmentCard('就職の学校推薦', '推薦に必要な単位数', 'flag', recommendation.met, [
           conditionRow('1〜4年の専門', recommendation.specialized),
-          conditionRow('指定7科目', recommendation.designated),
+          conditionRow('4年の専門必修', recommendation.designated),
         ])}
         ${judgmentCard('卒業', '総単位・一般・専門の3条件', 'graduation', graduation.met, [
           conditionRow('総単位', graduation.total),
           conditionRow('一般', graduation.general),
           conditionRow('専門', graduation.specialized),
+          requirementRow('4・5年の必修（別条件）', requiredRemaining ? `未修得 ${requiredRemaining} 科目` : '修得済み', !requiredRemaining),
         ])}
       </div>
-      <p class="judgment-note">${icon('info', 17)}<span>単位数条件は確定単位で判定します。進級と学校推薦には現在の資格・学外認定単位を反映するため、過去の年度末時点の判定とは異なる場合があります。</span></p>
+      <p class="judgment-note">${icon('info', 17)}<span>進級・卒業は、必修科目の履修状況なども含めて学校が認定します。進級と学校推薦の累計には、現在の資格・学外認定単位を反映します。 <a href="https://www.kagawa-nct.ac.jp/general_affairs/rules/05-01.pdf#page=2">学校の認定規程</a></span></p>
     </section>
     <div class="detail-grid dashboard-section">
       <section class="panel detail-card" aria-labelledby="grade-heading">

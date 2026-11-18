@@ -107,6 +107,7 @@ progress::-moz-progress-bar { background: currentColor; border-radius: 20px; }
 .judgment-card > p { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .criterion-list { margin: 12px 0 0; padding: 0; list-style: none; }
 .criterion { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 9px; min-height: 32px; border-top: 1px solid var(--line); font-size: 13px; }
+.criterion.criterion-check { grid-template-columns: 1fr auto; }
 .criterion-label { color: #375451; }
 .criterion-value { color: var(--muted); white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
 .criterion-value > strong { color: var(--ink); font-size: 15px; }

@@ -51,7 +51,11 @@ test('initial credits come from required courses in years 1–3 only', () => {
   }
   assert.equal(grades[4].total, 0);
   assert.equal(grades[5].total, 0);
-  assert.deepEqual(conditions.promotion, { current: 96, required: 128, remaining: 32, met: false });
+  assert.deepEqual(conditions.promotion, {
+    credits: { current: 96, required: 128, remaining: 32, met: false },
+    labEarned: false,
+    met: false,
+  });
   assert.equal(getCourseStatus(createState(), LOWER_REQUIRED_COURSES[0]).earned, true);
   assert.equal(setCourseEarned(createState(), LOWER_REQUIRED_COURSES[0], false), false);
 });
@@ -83,25 +87,48 @@ test('upper-year electives can be marked earned directly', () => {
   assert.equal(calculateCredits(state).total.total, 96);
 });
 
-test('promotion reaches 128 exactly and excludes courses earned in year 5', () => {
+test('promotion requires both 128 through year 4 and the year-4 laboratory', () => {
   const state = createState();
   const yearFive = COURSES.find(course => course.grade === 5 && course.required);
+  const laboratory = courseById('g4-253125');
   earn(state, yearFive);
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 31 }), true);
+  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 32 }), true);
   let result = calculateCredits(state);
   assert.ok(result.total.total >= 128);
-  assert.deepEqual(result.conditions.promotion, { current: 127, required: 128, remaining: 1, met: false });
+  assert.deepEqual(result.conditions.promotion, {
+    credits: { current: 128, required: 128, remaining: 0, met: true },
+    labEarned: false,
+    met: false,
+  });
 
-  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 32 }), true);
+  earn(state, laboratory);
+  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 27 }), true);
   result = calculateCredits(state);
-  assert.deepEqual(result.conditions.promotion, { current: 128, required: 128, remaining: 0, met: true });
+  assert.ok(result.total.total >= 128);
+  assert.deepEqual(result.conditions.promotion, {
+    credits: { current: 127, required: 128, remaining: 1, met: false },
+    labEarned: true,
+    met: false,
+  });
+
+  assert.equal(updateExternalCredit(state, 'external-general-a', { name: '学外集中講座', credits: 28 }), true);
+  result = calculateCredits(state);
+  assert.deepEqual(result.conditions.promotion, {
+    credits: { current: 128, required: 128, remaining: 0, met: true },
+    labEarned: true,
+    met: true,
+  });
 });
 
 test('recommendation independently checks 55 specialized and 10 designated credits', () => {
   const state = createState();
   const designated = COURSES.filter(course => course.recommendation);
+  const yearFourSpecializedRequired = COURSES.filter(course => (
+    course.grade === 4 && course.category === 'specialized' && course.required
+  ));
   const laboratory = courseById('g4-253125');
   assert.equal(designated.length, 7);
+  assert.deepEqual(designated, yearFourSpecializedRequired);
   assert.equal(designated.reduce((sum, course) => sum + course.credits, 0), 14);
   for (const course of designated) {
     if (course !== laboratory) earn(state, course);
@@ -158,6 +185,24 @@ test('graduation checks total, general and specialized credits independently', (
   assert.equal(graduation.met, true);
 });
 
+test('graduation reports remaining mandatory courses separately from its credit thresholds', () => {
+  const state = createState();
+  const required = COURSES.filter(course => course.grade >= 4 && course.required);
+  assert.equal(required.length, 13);
+  assert.equal(calculateCredits(state).conditions.graduation.requiredCoursesRemaining, 13);
+
+  for (const course of required) earn(state, course);
+  let { graduation } = calculateCredits(state).conditions;
+  assert.equal(graduation.requiredCoursesRemaining, 0);
+  assert.equal(graduation.met, false);
+
+  assert.equal(setCourseEarned(state, required[0], false), true);
+  external(state, 23, 48);
+  graduation = calculateCredits(state).conditions.graduation;
+  assert.equal(graduation.requiredCoursesRemaining, 1);
+  assert.equal(graduation.met, true);
+});
+
 test('TOEIC score boundaries map to the official bands', () => {
   for (const [score, credits] of [
     [399, undefined], [400, 1], [449, 1], [450, 2], [599, 2],
@@ -182,7 +227,7 @@ test('recognized options add only their thick group maximum while separate group
   assert.equal(result.certification.groups.toeic, 4);
   assert.equal(result.certification.groups.kanken, 2);
   assert.equal(result.certification.total, 6);
-  assert.equal(result.conditions.promotion.current, 102);
+  assert.equal(result.conditions.promotion.credits.current, 102);
 });
 
 test('passing a qualification without school recognition contributes zero', () => {
@@ -204,14 +249,14 @@ test('explicit course equivalents count once in the earliest selected year', () 
   earn(state, yearFive);
   let result = calculateCredits(state);
   assert.equal(result.grades[5].total, yearFive.credits);
-  assert.equal(result.conditions.promotion.current, 96);
+  assert.equal(result.conditions.promotion.credits.current, 96);
 
   earn(state, yearFour);
   result = calculateCredits(state);
   assert.equal(result.total.total, 96 + yearFour.credits);
   assert.equal(result.grades[4].total, yearFour.credits);
   assert.equal(result.grades[5].total, 0);
-  assert.equal(result.conditions.promotion.current, 96 + yearFour.credits);
+  assert.equal(result.conditions.promotion.credits.current, 96 + yearFour.credits);
 
   assert.equal(setCourseEarned(state, yearFour, false), true);
   assert.equal(calculateCredits(state).grades[5].total, yearFive.credits);
@@ -327,7 +372,7 @@ test('version 2 acquisitions migrate to the equivalent courses in their listed g
   assert.equal(result.grades[4].total, yearFour.credits);
   assert.equal(result.grades[5].total, yearFive.credits);
   assert.equal(result.total.total, 101 + yearFour.credits + yearFive.credits);
-  assert.equal(result.conditions.promotion.current, 101 + yearFour.credits);
+  assert.equal(result.conditions.promotion.credits.current, 101 + yearFour.credits);
   assert.equal(saveState(state, storage), true);
   assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), state);
   assert.deepEqual(loadState(storage), state);

@@ -263,13 +263,19 @@ export function calculateCredits(state, {
   const throughYearFour = combineCredits([grades[1], grades[2], grades[3], grades[4], certification, external]);
   const total = combineCredits([throughYearFour, grades[5]]);
 
-  const promotion = condition(throughYearFour.total, 128);
+  const promotionCredits = condition(throughYearFour.total, 128);
+  const laboratory = courses.find(course => course.id === 'g4-253125');
+  const labEarned = laboratory !== undefined && getCourseStatus(state, laboratory).earned;
+  const promotion = { credits: promotionCredits, labEarned, met: promotionCredits.met && labEarned };
   const specialized = condition(throughYearFour.specialized, 55);
   const designated = condition(designatedCredits, 10);
   const graduation = {
     total: condition(total.total, 167),
     general: condition(total.general, 75),
     specialized: condition(total.specialized, 82),
+    requiredCoursesRemaining: courses.filter(course => (
+      course.grade >= 4 && course.required && !getCourseStatus(state, course).earned
+    )).length,
   };
   graduation.met = graduation.total.met && graduation.general.met && graduation.specialized.met;
 
