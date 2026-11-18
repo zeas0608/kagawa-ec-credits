@@ -1,5 +1,8 @@
 import { loadState, saveState, resetState } from './model.js';
 
+export const COURSE_SECTIONS_KEY = 'kagawa-kosen-ec-credit-course-sections';
+export const CERT_SECTIONS_KEY = 'kagawa-kosen-ec-credit-cert-sections';
+
 const NAV = [
   { id: 'dashboard', href: './index.html', label: 'ダッシュボード', icon: 'dashboard' },
   { id: 'courses', href: './courses.html', label: '科目管理', icon: 'book' },
@@ -25,6 +28,7 @@ const ICON_PATHS = {
 
 const escapedCharacters = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 let memoryState;
+const memorySections = new Map();
 
 export function icon(name, size = 20) {
   return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] ?? ''}</svg>`;
@@ -42,6 +46,26 @@ export function matchesSearch(text, query) {
   const normalize = (value) => String(value).normalize('NFKC').toLowerCase();
   const haystack = normalize(text);
   return normalize(query).trim().split(/\s+/).every((word) => haystack.includes(word));
+}
+
+export function getOpenSections(key) {
+  if (memorySections.has(key)) return new Set(memorySections.get(key));
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    if (Array.isArray(saved)) return new Set(saved.filter((id) => typeof id === 'string'));
+  } catch {
+    return new Set();
+  }
+  return new Set();
+}
+
+export function saveOpenSections(key, sections) {
+  try {
+    localStorage.setItem(key, JSON.stringify([...sections]));
+    memorySections.delete(key);
+  } catch {
+    memorySections.set(key, new Set(sections));
+  }
 }
 
 function showStorageError(message) {
@@ -94,9 +118,11 @@ export function mountShell(active) {
       </div>
     </footer>`;
   document.querySelector('#reset-data').addEventListener('click', () => {
-    if (!window.confirm('入力した科目・資格・その他認定単位のデータをすべて削除し、初期状態に戻しますか？')) return;
+    if (!window.confirm('科目の取得状況・想定科目・認定単位と、項目の開閉状態を初期化しますか？')) return;
     try {
       if (!resetState()) throw new Error('Storage unavailable');
+      localStorage.removeItem(COURSE_SECTIONS_KEY);
+      localStorage.removeItem(CERT_SECTIONS_KEY);
       window.location.reload();
     } catch {
       showStorageError('保存データを初期化できませんでした。ブラウザの保存設定をご確認ください。');

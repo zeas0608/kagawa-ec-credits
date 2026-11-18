@@ -1,7 +1,8 @@
 import { CERTIFICATION_GROUPS } from './cert-data.js';
 import { COURSES, INITIAL_REQUIRED_BY_GRADE, LOWER_REQUIRED_COURSES } from './course-data.js';
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
+const LEGACY_STATE_VERSION = 1;
 export const STORAGE_KEY = 'kagawa-kosen-ec-credit-tracker';
 
 export const EXTERNAL_CREDIT_SLOTS = Object.freeze([
@@ -39,39 +40,37 @@ export function createState() {
   };
 }
 
-function needsEnrollment(course) {
-  return course.grade >= 4 && !course.required;
+function isFixedCourse(course) {
+  return course.grade <= 3 && course.required;
 }
 
 export function getCourseStatus(state, course) {
+  if (isFixedCourse(course)) return { earned: true, planned: false };
+
   const record = state.courses[course.id];
-  const enrolled = !needsEnrollment(course) || record?.enrolled === true;
-  const fixedRequired = course.grade <= 3 && course.required;
-  return { enrolled, earned: fixedRequired || (enrolled && record?.earned === true) };
+  return { earned: record?.earned === true, planned: record?.planned === true };
 }
 
-export function setCourseEnrollment(state, course, enrolled) {
-  if (!needsEnrollment(course) || typeof enrolled !== 'boolean') return false;
-
-  if (enrolled) {
-    state.courses[course.id] = { enrolled: true, earned: getCourseStatus(state, course).earned };
+function writeCourseStatus(state, course, status) {
+  if (status.earned || status.planned) {
+    state.courses[course.id] = status;
   } else {
     delete state.courses[course.id];
   }
-  return true;
 }
 
 export function setCourseEarned(state, course, earned) {
-  if (typeof earned !== 'boolean' || (course.grade <= 3 && course.required)) return false;
+  if (typeof earned !== 'boolean' || isFixedCourse(course)) return false;
 
-  const status = getCourseStatus(state, course);
-  if (!status.enrolled) return false;
+  const { planned } = getCourseStatus(state, course);
+  writeCourseStatus(state, course, { earned, planned });
+  return true;
+}
 
-  if (earned || needsEnrollment(course)) {
-    state.courses[course.id] = { enrolled: true, earned };
-  } else {
-    delete state.courses[course.id];
-  }
+export function setCoursePlanned(state, course, planned) {
+  if (typeof planned !== 'boolean' || getCourseStatus(state, course).earned) return false;
+
+  writeCourseStatus(state, course, { earned: false, planned });
   return true;
 }
 
@@ -146,12 +145,24 @@ export function loadState(storage) {
   const state = createState();
   try {
     const saved = parseState((storage ?? globalThis.localStorage).getItem(STORAGE_KEY));
-    if (saved?.version !== STATE_VERSION) return state;
+    if (saved?.version !== STATE_VERSION && saved?.version !== LEGACY_STATE_VERSION) return state;
 
     for (const course of COURSES) {
       const record = saved.courses?.[course.id];
-      if (record?.enrolled === true) setCourseEnrollment(state, course, true);
-      if (record?.earned === true) setCourseEarned(state, course, true);
+      if (!record) continue;
+
+      if (saved.version === LEGACY_STATE_VERSION) {
+        const enrollmentRequired = course.grade >= 4 && !course.required;
+        const enrolled = record.enrolled === true;
+        if (record.earned === true && (!enrollmentRequired || enrolled)) {
+          setCourseEarned(state, course, true);
+        } else if (enrollmentRequired && enrolled) {
+          setCoursePlanned(state, course, true);
+        }
+      } else {
+        if (record.planned === true) setCoursePlanned(state, course, true);
+        if (record.earned === true) setCourseEarned(state, course, true);
+      }
     }
 
     for (const id of certificationIds) {
@@ -225,16 +236,21 @@ export function calculateCredits(state, {
   courses = COURSES,
   certificationGroups = CERTIFICATION_GROUPS,
   initialRequiredByGrade = INITIAL_REQUIRED_BY_GRADE,
+  includePlanned = false,
 } = {}) {
-  const earnedCourses = new Map();
+  const countedCourses = new Map();
   for (const course of courses) {
-    if (course.grade <= 3 && course.required) continue;
-    if (!getCourseStatus(state, course).earned) continue;
+    if (isFixedCourse(course)) continue;
+    const { earned, planned } = getCourseStatus(state, course);
+    if (!earned && !(includePlanned && planned)) continue;
 
     const key = course.equivalentGroup ?? course.id;
-    const existing = earnedCourses.get(key);
-    // When both published years are marked as earned, credit the earlier year once.
-    if (!existing || course.grade < existing.grade) earnedCourses.set(key, course);
+    const existing = countedCourses.get(key);
+    // Use the earned listing first, then the earliest year when both statuses match.
+    if (!existing || (earned && !existing.earned) ||
+        (earned === existing.earned && course.grade < existing.course.grade)) {
+      countedCourses.set(key, { course, earned });
+    }
   }
 
   const grades = {};
@@ -244,7 +260,7 @@ export function calculateCredits(state, {
   }
 
   let designatedCredits = 0;
-  for (const course of earnedCourses.values()) {
+  for (const { course } of countedCourses.values()) {
     grades[course.grade][course.category] += course.credits;
     grades[course.grade].total += course.credits;
     if (course.grade <= 4 && course.recommendation) designatedCredits += course.credits;

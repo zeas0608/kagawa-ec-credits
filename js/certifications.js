@@ -1,5 +1,8 @@
 import { CERTIFICATION_GROUPS, getToeicOption, TOEIC_GROUP_ID } from './cert-data.js';
-import { categoryLabel, escapeHtml, getState, icon, matchesSearch, mountShell, updateState } from './common.js';
+import {
+  CERT_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, matchesSearch, mountShell,
+  saveOpenSections, updateState,
+} from './common.js';
 import {
   calculateCredits,
   EXTERNAL_CREDIT_SLOTS,
@@ -25,7 +28,6 @@ const search = document.querySelector('#cert-search');
 const category = document.querySelector('#cert-category');
 const certList = document.querySelector('#cert-list');
 const externalList = document.querySelector('#external-list');
-const groupVisibility = new Map([[TOEIC_GROUP_ID, true]]);
 
 function statusSelect(label, status, attributes = '') {
   const options = statuses.map(([value, text]) => (
@@ -111,6 +113,7 @@ function renderGroup(group, options, state, totals, expanded) {
 function renderCertList(state = getState()) {
   const query = search.value.trim();
   const totals = calculateCredits(state);
+  const openGroups = getOpenSections(CERT_SECTIONS_KEY);
   const results = [];
   for (const group of CERTIFICATION_GROUPS) {
     if (category.value && category.value !== group.category) continue;
@@ -118,7 +121,7 @@ function renderCertList(state = getState()) {
       ? group.options
       : group.options.filter(option => matchesOption(option, query));
     if (options.length) {
-      results.push(renderGroup(group, options, state, totals, groupVisibility.get(group.id) ?? Boolean(query)));
+      results.push(renderGroup(group, options, state, totals, openGroups.has(group.id)));
     }
   }
   certList.innerHTML = results.join('') || '<p class="empty-state" role="status">該当する資格・検定はありません。</p>';
@@ -251,12 +254,16 @@ renderTotals(getState());
 
 search.addEventListener('input', () => renderCertList());
 category.addEventListener('change', () => renderCertList());
-certList.addEventListener('click', event => {
-  const summary = event.target.closest('summary');
-  if (!summary) return;
-  const group = summary.parentElement;
-  groupVisibility.set(group.dataset.certGroup, !group.open);
-});
+certList.addEventListener('toggle', event => {
+  const group = event.target;
+  if (!group.matches('details[data-cert-group]')) return;
+  const id = group.dataset.certGroup;
+  const openGroups = getOpenSections(CERT_SECTIONS_KEY);
+  if (openGroups.has(id) === group.open) return;
+  if (group.open) openGroups.add(id);
+  else openGroups.delete(id);
+  saveOpenSections(CERT_SECTIONS_KEY, openGroups);
+}, true);
 certList.addEventListener('input', event => {
   if (event.target.id !== 'toeic-score') return;
   const { score, online } = readToeicFields();
@@ -303,6 +310,12 @@ function syncStoredData() {
 
 window.addEventListener('storage', event => {
   if (event.key === STORAGE_KEY || event.key === null) syncStoredData();
+  if (event.key === CERT_SECTIONS_KEY) {
+    const openGroups = getOpenSections(CERT_SECTIONS_KEY);
+    for (const group of certList.querySelectorAll('details[data-cert-group]')) {
+      group.open = openGroups.has(group.dataset.certGroup);
+    }
+  }
 });
 window.addEventListener('pageshow', event => {
   if (event.persisted) syncStoredData();

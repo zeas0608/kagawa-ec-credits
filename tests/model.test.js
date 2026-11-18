@@ -13,7 +13,7 @@ import {
   saveState,
   setCertificationStatus,
   setCourseEarned,
-  setCourseEnrollment,
+  setCoursePlanned,
   setToeic,
   STORAGE_KEY,
   updateExternalCredit,
@@ -26,9 +26,6 @@ function courseById(id) {
 }
 
 function earn(state, course) {
-  if (course.grade >= 4 && !course.required) {
-    assert.equal(setCourseEnrollment(state, course, true), true);
-  }
   assert.equal(setCourseEarned(state, course, true), true);
 }
 
@@ -57,6 +54,7 @@ test('initial credits come from required courses in years 1–3 only', () => {
   assert.deepEqual(conditions.promotion, { current: 96, required: 128, remaining: 32, met: false });
   assert.equal(getCourseStatus(createState(), LOWER_REQUIRED_COURSES[0]).earned, true);
   assert.equal(setCourseEarned(createState(), LOWER_REQUIRED_COURSES[0], false), false);
+  assert.equal(setCoursePlanned(createState(), LOWER_REQUIRED_COURSES[0], true), false);
 });
 
 test('lower-year electives and upper-year required courses count only while earned', () => {
@@ -76,19 +74,56 @@ test('lower-year electives and upper-year required courses count only while earn
   assert.equal(calculateCredits(state).total.total, 96);
 });
 
-test('upper-year electives require enrollment and earning, and withdrawal clears both', () => {
+test('upper-year electives can be marked earned directly', () => {
   const state = createState();
   const elective = courseById('g4-251134');
-  assert.deepEqual(getCourseStatus(state, elective), { enrolled: false, earned: false });
-  assert.equal(setCourseEarned(state, elective, true), false);
-  assert.equal(setCourseEnrollment(state, elective, true), true);
-  assert.equal(calculateCredits(state).total.total, 96);
-  assert.equal(setCourseEarned(state, elective, true), true);
+  assert.deepEqual(getCourseStatus(state, elective), { earned: false, planned: false });
+  earn(state, elective);
   assert.equal(calculateCredits(state).total.total, 96 + elective.credits);
-  assert.equal(setCourseEnrollment(state, elective, false), true);
+  assert.equal(setCourseEarned(state, elective, false), true);
   assert.equal(calculateCredits(state).total.total, 96);
-  assert.equal(setCourseEnrollment(state, elective, true), true);
-  assert.deepEqual(getCourseStatus(state, elective), { enrolled: true, earned: false });
+});
+
+test('planning only affects projected credits and survives a correction to earned status', () => {
+  const state = createState();
+  const elective = courseById('g4-251134');
+  assert.equal(setCoursePlanned(state, elective, true), true);
+  assert.equal(calculateCredits(state).total.total, 96);
+  assert.equal(calculateCredits(state, { includePlanned: true }).total.total, 96 + elective.credits);
+
+  earn(state, elective);
+  assert.deepEqual(getCourseStatus(state, elective), { earned: true, planned: true });
+  assert.equal(setCoursePlanned(state, elective, false), false);
+  assert.equal(calculateCredits(state).total.total, 96 + elective.credits);
+  assert.equal(calculateCredits(state, { includePlanned: true }).total.total, 96 + elective.credits);
+
+  assert.equal(setCourseEarned(state, elective, false), true);
+  assert.deepEqual(getCourseStatus(state, elective), { earned: false, planned: true });
+  assert.equal(calculateCredits(state).total.total, 96);
+  assert.equal(setCoursePlanned(state, elective, false), true);
+  assert.equal(calculateCredits(state, { includePlanned: true }).total.total, 96);
+});
+
+test('projections update each applicable condition and keep school recognition rules', () => {
+  const state = createState();
+  const laboratory = courseById('g4-253125');
+  const yearFive = COURSES.find(course => course.grade === 5 && course.required);
+  assert.equal(setCoursePlanned(state, laboratory, true), true);
+  assert.equal(setCoursePlanned(state, yearFive, true), true);
+  assert.equal(setCertificationStatus(state, 'ipa-ap', 'passed'), true);
+  assert.equal(setCertificationStatus(state, 'toeic-450', 'recognized'), true);
+
+  const confirmed = calculateCredits(state);
+  const projected = calculateCredits(state, { includePlanned: true });
+  assert.equal(confirmed.conditions.promotion.current, 98);
+  assert.equal(projected.conditions.promotion.current, 102);
+  assert.equal(confirmed.conditions.recommendation.designated.current, 0);
+  assert.equal(projected.conditions.recommendation.designated.current, 4);
+  assert.equal(confirmed.conditions.recommendation.specialized.current, 34);
+  assert.equal(projected.conditions.recommendation.specialized.current, 38);
+  assert.equal(projected.conditions.graduation.total.current, 102 + yearFive.credits);
+  assert.deepEqual(projected.certification, confirmed.certification);
+  assert.equal(projected.certification.total, 2);
 });
 
 test('promotion reaches 128 exactly and excludes courses earned in year 5', () => {
@@ -225,6 +260,25 @@ test('explicit course equivalents count once in the earliest selected year', () 
   assert.equal(calculateCredits(state).grades[5].total, yearFive.credits);
 });
 
+test('a projected equivalent prioritizes an earned occurrence before the earliest plan', () => {
+  const state = createState();
+  const yearFour = courseById('g4-251134');
+  const yearFive = courseById('g5-251151');
+  assert.equal(setCoursePlanned(state, yearFive, true), true);
+  assert.equal(setCoursePlanned(state, yearFour, true), true);
+
+  let projected = calculateCredits(state, { includePlanned: true });
+  assert.equal(projected.grades[4].total, yearFour.credits);
+  assert.equal(projected.grades[5].total, 0);
+  assert.equal(projected.total.total, 96 + yearFour.credits);
+
+  earn(state, yearFive);
+  projected = calculateCredits(state, { includePlanned: true });
+  assert.deepEqual(projected, calculateCredits(state));
+  assert.equal(projected.grades[5].total, yearFive.credits);
+  assert.equal(projected.conditions.promotion.current, 96);
+});
+
 test('namesake course listings are independent unless explicitly grouped', () => {
   const first = { id: 'test-4', name: '同名科目', grade: 4, category: 'general', required: true, credits: 2 };
   const second = { ...first, id: 'test-5', grade: 5 };
@@ -257,17 +311,49 @@ test('versioned localStorage round-trips and resets all recognized and earned in
   const storage = createMemoryStorage();
   assert.deepEqual(loadState(storage), state);
 
-  earn(state, courseById('g4-253125'));
-  assert.equal(setCourseEnrollment(state, courseById('g5-251151'), true), true);
+  const laboratory = courseById('g4-253125');
+  assert.equal(setCoursePlanned(state, laboratory, true), true);
+  earn(state, laboratory);
+  assert.equal(setCoursePlanned(state, courseById('g5-251151'), true), true);
   assert.equal(setCertificationStatus(state, 'toeic-450', 'recognized'), true);
   assert.equal(setToeic(state, 450, false), true);
   external(state, 2, 3);
   assert.equal(saveState(state, storage), true);
-  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).version, 1);
+  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).version, 2);
   assert.deepEqual(loadState(storage), state);
   assert.deepEqual(calculateCredits(loadState(storage)), calculateCredits(state));
   assert.deepEqual(resetState(storage), createState());
   assert.deepEqual(loadState(storage), createState());
+});
+
+test('version 1 storage preserves earned courses, recognition and enrolled electives as plans', () => {
+  const storage = createMemoryStorage();
+  const legacy = {
+    version: 1,
+    courses: {
+      'g4-253125': { enrolled: true, earned: true },
+      'g4-251134': { enrolled: true, earned: false },
+      'g5-251151': { enrolled: false, earned: true },
+    },
+    certifications: { 'toeic-450': 'recognized', 'ipa-ap': 'passed' },
+    toeic: { score: 450, online: false },
+    external: [{ id: 'external-general-a', name: '学外研修', category: 'general', credits: 3 }],
+  };
+  storage.setItem(STORAGE_KEY, JSON.stringify(legacy));
+
+  const state = loadState(storage);
+  assert.equal(state.version, 2);
+  assert.deepEqual(state.courses, {
+    'g4-253125': { earned: true, planned: false },
+    'g4-251134': { earned: false, planned: true },
+  });
+  assert.deepEqual(state.certifications, legacy.certifications);
+  assert.deepEqual(state.toeic, legacy.toeic);
+  assert.deepEqual(state.external, legacy.external);
+  assert.equal(calculateCredits(state).total.total, 105);
+  assert.equal(calculateCredits(state, { includePlanned: true }).total.total, 105 + courseById('g4-251134').credits);
+  assert.equal(saveState(state, storage), true);
+  assert.deepEqual(loadState(storage), state);
 });
 
 test('unrecognized records and malformed storage do not affect totals', () => {
@@ -277,14 +363,14 @@ test('unrecognized records and malformed storage do not affect totals', () => {
   assert.deepEqual(loadState(storage), state);
 
   const invalid = createState();
-  invalid.courses['g4-251134'] = { enrolled: false, earned: true };
+  invalid.courses['g4-251134'] = { planned: 'true', earned: 'true' };
   invalid.certifications['toeic-450'] = 'unknown';
   invalid.external.push({ id: 'external-general-a', name: '学外研修', credits: -2 });
   storage.setItem(STORAGE_KEY, JSON.stringify(invalid));
   assert.deepEqual(loadState(storage), state);
   assert.equal(calculateCredits(loadState(storage)).total.total, 96);
 
-  const future = JSON.stringify({ ...state, version: 2 });
+  const future = JSON.stringify({ ...state, version: 3 });
   storage.setItem(STORAGE_KEY, future);
   assert.deepEqual(loadState(storage), state);
   assert.equal(saveState(state, storage), false);
