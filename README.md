@@ -4,7 +4,7 @@
 
 ## アクセス
 
-**[単位管理ツールを開く](https://zeas0608.github.io/kagawa-ec-credits/)**
+<https://zeas0608.github.io/kagawa-ec-credits/>
 
 スマホ・タブレット・PCのブラウザで使えます。インストールやログインは不要です。
 
