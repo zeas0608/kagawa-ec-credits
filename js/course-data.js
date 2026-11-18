@@ -1,7 +1,12 @@
-// 香川高専 電気情報工学科（2019年度以降入学者）2025年度学科シラバス。
-export const SYLLABUS_URL = "https://syllabus.kosen-k.go.jp/Pages/PublicSubjects?school_id=39&department_id=32&year=2025&lang=ja";
+// 香川高専 電気情報工学科（2019年度以降入学者）の公開シラバス。
+// 1〜3年は2025年度の既修課程、4・5年は2026年度の開講科目。
+const syllabusBaseUrl = "https://syllabus.kosen-k.go.jp/Pages";
+const syllabusDepartment = "school_id=39&department_id=32";
+export const SYLLABUS_YEAR = 2026;
+export const SYLLABUS_URL = `${syllabusBaseUrl}/PublicSubjects?${syllabusDepartment}&year=${SYLLABUS_YEAR}&lang=ja`;
 
-// 学校要覧の教育課程表では、芸術（美術・音楽）は一般必修の芸術2単位として計上。
+// 初期取得単位は2025年度学校要覧の教育課程表と利用者指定の内訳に基づく。
+// 芸術（美術・音楽）は一般必修の芸術2単位として計上。
 // https://www.kagawa-nct.ac.jp/prospectus/publication/yoran/yoran_jp2025_03.pdf
 export const INITIAL_REQUIRED_BY_GRADE = Object.freeze({
   1: Object.freeze({ general: 24, specialized: 8 }),
@@ -13,27 +18,10 @@ export const INITIAL_REQUIRED_BY_GRADE = Object.freeze({
 // 配列の先頭は集計用IDとして使う。
 const equivalentCodes = [
   ["251133", "251150", "251167"], // 海外英語演習
-  ["251134", "251151"], // 文学特論Ⅰ
-  ["251135", "251152"], // 人文科学Ⅰ
-  ["251136", "251153"], // 人文科学Ⅱ
-  ["251141", "251158"], // 化学概論Ⅰ
-  ["251142", "251159"], // 化学概論Ⅱ
-  ["253126", "253158"], // 半導体物理
-  ["253127", "253159"], // 電磁気学Ⅱ
-  ["253128", "253160"], // 電気回路Ⅱ
-  ["253129", "253161"], // 計測工学
-  ["253130", "253162"], // 電気電子材料
-  ["253131", "253163"], // 電子回路Ⅱ
-  ["253132", "253164"], // 電子回路Ⅲ
-  ["253133", "253165"], // エネルギー変換工学
-  ["253134", "253166"], // 制御工学
-  ["253135", "253167"], // 電子デバイス
-  ["253139", "253171"], // 計算機アーキテクチャ
-  ["253140", "253172"], // オペレーティングシステム
-  ["253141", "253173"], // 信号処理
   ["253146", "253179"], // 校外実習
   ["253147", "253180"], // 特別講義Ⅰ
   ["253148", "253181"], // 特別講義Ⅱ
+  ["253150", "253183"], // 特別講義Ⅳ
 ];
 const groupByCode = new Map(
   equivalentCodes.flatMap((codes) => codes.map((code) => [code, `ec-${codes[0]}`])),
@@ -51,6 +39,9 @@ const recommendationCodes = new Set([
 ]);
 
 function course([grade, code, name, category, required, credits]) {
+  const academicYear = grade <= 3 ? 2025 : SYLLABUS_YEAR;
+  // 個別シラバスの year には入学年度を指定する。
+  const admissionYear = academicYear - grade + 1;
   return Object.freeze({
     id: `g${grade}-${code}`,
     code,
@@ -59,6 +50,7 @@ function course([grade, code, name, category, required, credits]) {
     category,
     required,
     credits,
+    syllabusUrl: `${syllabusBaseUrl}/PublicSyllabus?${syllabusDepartment}&subject_code=${code}&year=${admissionYear}&lang=ja`,
     equivalentGroup: groupByCode.get(code),
     recommendation: recommendationCodes.has(code),
   });
@@ -145,29 +137,19 @@ export const COURSES = Object.freeze([
   [4, "253127", "電磁気学Ⅱ", "specialized", false, 2],
   [4, "253128", "電気回路Ⅱ", "specialized", false, 2],
   [4, "253129", "計測工学", "specialized", false, 2],
-  [4, "253130", "電気電子材料", "specialized", false, 2],
   [4, "253131", "電子回路Ⅱ", "specialized", false, 2],
-  [4, "253132", "電子回路Ⅲ", "specialized", false, 2],
-  [4, "253133", "エネルギー変換工学", "specialized", false, 2],
-  [4, "253134", "制御工学", "specialized", false, 2],
-  [4, "253135", "電子デバイス", "specialized", false, 2],
   [4, "253137", "情報通信ネットワーク", "specialized", false, 2],
   [4, "253138", "アルゴリズム", "specialized", false, 2],
   [4, "253139", "計算機アーキテクチャ", "specialized", false, 2],
   [4, "253140", "オペレーティングシステム", "specialized", false, 2],
-  [4, "253141", "信号処理", "specialized", false, 2],
   [4, "253146", "校外実習", "specialized", false, 1],
   [4, "253147", "特別講義Ⅰ", "specialized", false, 1],
   [4, "253148", "特別講義Ⅱ", "specialized", false, 1],
+  [4, "253150", "特別講義Ⅳ", "specialized", false, 1],
   [4, "253151", "ソフトウェア特別実習Ⅱ", "specialized", false, 4],
 
   // 5年
-  [5, "251151", "文学特論Ⅰ", "general", false, 2],
-  [5, "251152", "人文科学Ⅰ", "general", false, 2],
-  [5, "251153", "人文科学Ⅱ", "general", false, 2],
   [5, "251155", "社会科学Ⅰ", "general", false, 2],
-  [5, "251158", "化学概論Ⅰ", "general", false, 2],
-  [5, "251159", "化学概論Ⅱ", "general", false, 2],
   [5, "251160", "体育Ⅱ", "general", false, 1],
   [5, "251161", "英語ⅤＡ", "general", false, 2],
   [5, "251162", "英語ⅤＢ", "general", false, 2],
@@ -180,19 +162,12 @@ export const COURSES = Object.freeze([
   [5, "253155", "卒業研究", "specialized", true, 8],
   [5, "253156", "回路設計（電子設計）", "specialized", true, 1],
   [5, "253157", "回路設計（論理設計）", "specialized", true, 1],
-  [5, "253158", "半導体物理", "specialized", false, 2],
-  [5, "253159", "電磁気学Ⅱ", "specialized", false, 2],
-  [5, "253160", "電気回路Ⅱ", "specialized", false, 2],
-  [5, "253161", "計測工学", "specialized", false, 2],
   [5, "253162", "電気電子材料", "specialized", false, 2],
-  [5, "253163", "電子回路Ⅱ", "specialized", false, 2],
   [5, "253164", "電子回路Ⅲ", "specialized", false, 2],
   [5, "253165", "エネルギー変換工学", "specialized", false, 2],
   [5, "253166", "制御工学", "specialized", false, 2],
   [5, "253167", "電子デバイス", "specialized", false, 2],
   [5, "253168", "通信工学", "specialized", false, 2],
-  [5, "253171", "計算機アーキテクチャ", "specialized", false, 2],
-  [5, "253172", "オペレーティングシステム", "specialized", false, 2],
   [5, "253173", "信号処理", "specialized", false, 2],
   [5, "253174", "情報・符号理論", "specialized", false, 2],
   [5, "253175", "知能情報処理", "specialized", false, 2],

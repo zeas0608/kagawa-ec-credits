@@ -1,17 +1,15 @@
-import { COURSES, INITIAL_REQUIRED_BY_GRADE, SYLLABUS_URL } from './course-data.js';
+import { COURSES, INITIAL_REQUIRED_BY_GRADE, SYLLABUS_URL, SYLLABUS_YEAR } from './course-data.js';
 import {
   COURSE_SECTIONS_KEY, categoryLabel, escapeHtml, getOpenSections, getState, icon, matchesSearch, mountShell,
   saveOpenSections, updateState,
 } from './common.js';
-import { getCourseStatus, setCourseEarned, setCoursePlanned, STORAGE_KEY } from './model.js';
+import { getCourseStatus, setCourseEarned, STORAGE_KEY } from './model.js';
 
 const years = [1, 2, 3, 4, 5];
 const courseById = new Map(COURSES.map(course => [course.id, course]));
 const filters = document.querySelector('#course-filters');
 const groups = document.querySelector('#course-groups');
 const results = document.querySelector('#course-results');
-const modePicker = document.querySelector('#course-mode');
-let planning = new URLSearchParams(window.location.search).get('mode') === 'planned';
 let openYears = getOpenSections(COURSE_SECTIONS_KEY);
 
 function renderFoundation() {
@@ -33,41 +31,34 @@ function renderFoundation() {
   `).join('');
 }
 
-function inputStatus(state, course) {
-  const { earned, planned } = getCourseStatus(state, course);
-  const includedInPlan = planning && !earned && planned;
-  return {
-    earned,
-    includedInPlan,
-    checked: earned || includedInPlan,
-    disabled: planning && earned,
-    label: planning ? (earned ? '取得済み' : '想定に含める') : '単位取得',
-  };
-}
-
 function renderCourse(course, state) {
   const name = escapeHtml(course.name);
   const id = escapeHtml(course.id);
-  const { earned, includedInPlan, checked, disabled, label } = inputStatus(state, course);
+  const { earned } = getCourseStatus(state, course);
   const equivalent = course.equivalentGroup
     ? '<span title="複数学年の取得を記録しても、単位は一度だけ計上されます。">他学年にも掲載</span>'
     : '';
   const recommendation = course.recommendation ? '<span>推薦指定</span>' : '';
+  const code = escapeHtml(course.code);
+  const syllabus = course.syllabusUrl
+    ? `<a class="course-syllabus" href="${escapeHtml(course.syllabusUrl)}"
+        aria-label="シラバス ${code} ${name}（${course.grade}年）">シラバス ${code}</a>`
+    : '';
   return `
-    <li class="subject-row course-row" data-course-id="${id}" data-earned="${earned}" data-planned="${includedInPlan}">
+    <li class="subject-row course-row" data-course-id="${id}" data-earned="${earned}">
       <div class="subject-main course-main">
         <p class="course-name">${name}</p>
         <div class="course-meta">
           <span class="tag ${course.category}">${categoryLabel(course.category)}</span>
           <span class="course-credit">${course.credits}<span>単位</span></span>
-          ${recommendation}${equivalent}
+          ${recommendation}${equivalent}${syllabus}
         </div>
       </div>
       <div class="subject-actions course-actions">
         <label class="course-check">
-          <input type="checkbox" data-course-action="${planning ? 'plan' : 'earn'}"
-            aria-label="${label} ${name}（${course.grade}年）" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
-          <span>${label}</span>
+          <input type="checkbox" data-course-action="earn"
+            aria-label="単位取得 ${name}（${course.grade}年）" ${earned ? 'checked' : ''}>
+          <span>単位取得</span>
         </label>
       </div>
     </li>
@@ -124,14 +115,9 @@ function renderCourses() {
 
 function syncCourseRow(row, state) {
   const course = courseById.get(row.dataset.courseId);
-  const { earned, includedInPlan, checked, disabled, label } = inputStatus(state, course);
-  const input = row.querySelector('[data-course-action]');
-  input.checked = checked;
-  input.disabled = disabled;
-  input.setAttribute('aria-label', `${label} ${course.name}（${course.grade}年）`);
-  input.nextElementSibling.textContent = label;
+  const { earned } = getCourseStatus(state, course);
+  row.querySelector('[data-course-action="earn"]').checked = earned;
   row.dataset.earned = earned;
-  row.dataset.planned = includedInPlan;
 }
 
 function syncCourseRows() {
@@ -146,22 +132,6 @@ function syncOpenYears() {
   }
 }
 
-function renderMode() {
-  modePicker.querySelector(`[value="${planning ? 'planned' : 'earned'}"]`).checked = true;
-  document.querySelector('#course-mode-description').textContent = planning
-    ? '今後の取得を想定する科目を選びます。'
-    : '取得済みの科目にチェックを入れます。';
-}
-
-modePicker.addEventListener('change', event => {
-  planning = event.target.value === 'planned';
-  const url = new URL(window.location.href);
-  if (planning) url.searchParams.set('mode', 'planned');
-  else url.searchParams.delete('mode');
-  history.replaceState(history.state, '', url);
-  renderMode();
-  renderCourses();
-});
 filters.addEventListener('submit', event => event.preventDefault());
 filters.addEventListener('input', renderCourses);
 groups.addEventListener('click', event => {
@@ -175,13 +145,12 @@ groups.addEventListener('click', event => {
   saveOpenSections(COURSE_SECTIONS_KEY, openYears);
 });
 groups.addEventListener('change', event => {
-  const control = event.target.closest('[data-course-action]');
+  const control = event.target.closest('[data-course-action="earn"]');
   if (!control) return;
   const row = control.closest('[data-course-id]');
   const course = courseById.get(row.dataset.courseId);
   const state = updateState(draft => {
-    if (control.dataset.courseAction === 'plan') setCoursePlanned(draft, course, control.checked);
-    else setCourseEarned(draft, course, control.checked);
+    setCourseEarned(draft, course, control.checked);
   });
   syncCourseRow(row, state);
 });
@@ -198,7 +167,6 @@ window.addEventListener('pageshow', event => {
 
 mountShell('courses');
 document.querySelector('#course-source').innerHTML =
-  `<a class="text-link" href="${escapeHtml(SYLLABUS_URL)}">2025年度の公式シラバス ${icon('arrow', 15)}</a>`;
+  `<a class="text-link" href="${escapeHtml(SYLLABUS_URL)}">${SYLLABUS_YEAR}年度の公式シラバス ${icon('arrow', 15)}</a>`;
 renderFoundation();
-renderMode();
 renderCourses();

@@ -118,7 +118,7 @@ export function mountShell(active) {
       </div>
     </footer>`;
   document.querySelector('#reset-data').addEventListener('click', () => {
-    if (!window.confirm('科目の取得状況・想定科目・認定単位と、項目の開閉状態を初期化しますか？')) return;
+    if (!window.confirm('科目の取得状況・認定単位と、項目の開閉状態を初期化しますか？')) return;
     try {
       if (!resetState()) throw new Error('Storage unavailable');
       localStorage.removeItem(COURSE_SECTIONS_KEY);

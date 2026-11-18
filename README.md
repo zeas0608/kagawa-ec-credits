@@ -10,9 +10,9 @@
 
 ## 使い方
 
-1. **科目管理**の「取得入力」で、取得済みの科目の「単位取得」をチェックします。1〜3年の必修は初期状態で取得済みです。「想定入力」ではこれから取得する予定の科目を選びます。
+1. **科目管理**で、取得済みの科目の「単位取得」をチェックします。1〜3年の必修は初期状態で取得済みです。科目番号から個別シラバスを開けます。
 2. **資格認定**で資格・検定の取得状況を選びます。学校認定済みの資格を集計します。学校が認定した学外科目は「その他の認定単位」に入力します。
-3. **ダッシュボード**で、取得・認定済みの「確定単位」と、予定科目を加えた「想定単位」を確認します。各条件までの不足単位は確定単位で計算します。
+3. **ダッシュボード**で、取得・認定済みの確定単位と、各条件までの不足単位を確認します。
 
 入力と科目・資格欄の開閉状態は、開いたブラウザに自動保存されます。端末やブラウザを変えると、保存内容は引き継がれません。画面下の「データを初期化」で初期状態に戻せます。
 
@@ -24,7 +24,8 @@
 
 ## データの出典
 
-- 授業科目と開講学年。[2025年度シラバス](https://syllabus.kosen-k.go.jp/Pages/PublicSubjects?school_id=39&department_id=32&year=2025&lang=ja)・[2025年度学校要覧](https://www.kagawa-nct.ac.jp/prospectus/publication/yoran/yoran_jp2025_03.pdf)
+- 4・5年の授業科目と開講学年。[2026年度シラバス](https://syllabus.kosen-k.go.jp/Pages/PublicSubjects?school_id=39&department_id=32&year=2026&lang=ja)
+- 1〜3年の必修単位と選択科目。[2025年度シラバス](https://syllabus.kosen-k.go.jp/Pages/PublicSubjects?school_id=39&department_id=32&year=2025&lang=ja)・[2025年度学校要覧](https://www.kagawa-nct.ac.jp/prospectus/publication/yoran/yoran_jp2025_03.pdf)
 - 資格認定の対象、単位数、太枠グループ。[資格認定規程の別表](https://www.kagawa-nct.ac.jp/general_affairs/rules/05-04.pdf#page=3)
 
 ## ローカルで動かす

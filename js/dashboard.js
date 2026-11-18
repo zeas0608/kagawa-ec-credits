@@ -42,9 +42,7 @@ function judgmentCard(title, caption, symbol, met, rows) {
 }
 
 function renderDashboard() {
-  const state = getState();
-  const { total, grades, certification, external, conditions } = calculateCredits(state);
-  const projected = calculateCredits(state, { includePlanned: true }).total;
+  const { total, grades, certification, external, conditions } = calculateCredits(getState());
   const { promotion, recommendation, graduation } = conditions;
   const overallPercent = percent(total.total, graduation.total.required);
   dashboard.innerHTML = `
@@ -66,18 +64,6 @@ function renderDashboard() {
           ${progressBar('専門科目', graduation.specialized, 'specialized')}
         </div>
       </article>
-    </section>
-    <section class="panel projection-card" aria-labelledby="projection-heading">
-      <div>
-        <div class="card-heading"><span class="icon-tile">${icon('flag', 19)}</span><h2 id="projection-heading">想定単位</h2></div>
-        <p>確定単位に、想定入力で選んだ科目を加えた合計です。</p>
-      </div>
-      <dl class="projection-totals">
-        <div><dt>合計</dt><dd><strong id="projected-total">${projected.total}</strong> 単位</dd></div>
-        <div><dt>一般</dt><dd><strong id="projected-general">${projected.general}</strong> 単位</dd></div>
-        <div><dt>専門</dt><dd><strong id="projected-specialized">${projected.specialized}</strong> 単位</dd></div>
-      </dl>
-      <a class="button secondary" href="./courses.html?mode=planned">想定科目を選ぶ ${icon('arrow', 16)}</a>
     </section>
     <section class="dashboard-section" aria-labelledby="judgments-heading">
       <header class="section-heading"><h2 id="judgments-heading">単位数判定</h2></header>
