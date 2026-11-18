@@ -254,16 +254,16 @@ renderTotals(getState());
 
 search.addEventListener('input', () => renderCertList());
 category.addEventListener('change', () => renderCertList());
-certList.addEventListener('toggle', event => {
-  const group = event.target;
-  if (!group.matches('details[data-cert-group]')) return;
+certList.addEventListener('click', event => {
+  const summary = event.target.closest('.cert-group-summary');
+  if (!summary || event.defaultPrevented) return;
+  const group = summary.parentElement;
   const id = group.dataset.certGroup;
   const openGroups = getOpenSections(CERT_SECTIONS_KEY);
-  if (openGroups.has(id) === group.open) return;
-  if (group.open) openGroups.add(id);
-  else openGroups.delete(id);
+  if (group.open) openGroups.delete(id);
+  else openGroups.add(id);
   saveOpenSections(CERT_SECTIONS_KEY, openGroups);
-}, true);
+});
 certList.addEventListener('input', event => {
   if (event.target.id !== 'toeic-score') return;
   const { score, online } = readToeicFields();

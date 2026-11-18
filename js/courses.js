@@ -164,15 +164,16 @@ modePicker.addEventListener('change', event => {
 });
 filters.addEventListener('submit', event => event.preventDefault());
 filters.addEventListener('input', renderCourses);
-groups.addEventListener('toggle', event => {
-  const section = event.target;
-  if (!section.matches('details[data-section]')) return;
+groups.addEventListener('click', event => {
+  const summary = event.target.closest('.course-group-summary');
+  if (!summary || event.defaultPrevented) return;
+  const section = summary.parentElement;
   const year = section.dataset.section;
-  if (section.open === openYears.has(year)) return;
-  if (section.open) openYears.add(year);
-  else openYears.delete(year);
+  openYears = getOpenSections(COURSE_SECTIONS_KEY);
+  if (section.open) openYears.delete(year);
+  else openYears.add(year);
   saveOpenSections(COURSE_SECTIONS_KEY, openYears);
-}, true);
+});
 groups.addEventListener('change', event => {
   const control = event.target.closest('[data-course-action]');
   if (!control) return;
